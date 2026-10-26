@@ -274,7 +274,7 @@ write memory
 
 - **완료 보고:** IT 부서, Server Farm, Guest 유선 네트워크 추가 및 이전 안내 작업 완료.
 - **확인 기준:** 사용자의 완료 보고 기준이다. 최신 `.pkt`와 CLI 출력은 아직 다시 검토하지 않았다.
-- **오늘 추가할 작업:** Guest Wi-Fi 설정과 무선 클라이언트 검증. 아래 무선 테스트 결과는 현재 **미확인**이다.
+- **Guest Wi-Fi 완료 보고:** 사용자가 2026-10-26에 무선 설정 작업 완료를 알렸다. 개별 테스트 출력과 최신 `.pkt`는 아직 수집하지 않아 아래 세부 검증 결과는 미확인으로 유지한다.
 - 아래 명령은 오늘 안내한 구성의 재현용 기록이다. 실제 입력 이력이나 CLI 출력의 원본을 수집한 것은 아니다.
 - 앞부분의 부서별 장비 수는 **최종 설계 목표**이며, 해당 수량을 모두 배치한 상태를 뜻하지 않는다.
 
@@ -290,7 +290,7 @@ write memory
 | Guest 유선 구역 추가 | Guest 접속을 내부 부서와 분리 | VLAN 99와 Guest-Switch 구성 |
 | Guest ACL 적용 | 방문자의 내부 서버·부서 접근 차단 | DHCP와 Gateway Ping을 먼저 허용하고 사설망 목적지 차단 |
 | DHCP 범위 정리 | 고정 IP 충돌 및 Broadcast 주소 할당 방지 | Server Pool 정리, HR Pool 사용자 수 수정 |
-| Guest Wi-Fi 추가 — 진행 예정 | 무선 방문자도 기존 Guest 정책 사용 | AP를 Guest-Switch의 VLAN 99 Access Port에 연결 |
+| Guest Wi-Fi 추가 — 사용자 완료 보고 | 무선 방문자도 기존 Guest 정책 사용 | AP를 Guest-Switch의 VLAN 99 Access Port에 연결 |
 
 ### C. Current Port Map
 
@@ -312,7 +312,7 @@ write memory
 | Server-Switch | Fa0/1 | DHCP-Server / VLAN 50 |
 | Server-Switch | Fa0/2 | Web-Server / VLAN 50 |
 | Guest-Switch | Fa0/1~2 | Guest-PC-1, Guest-PC-2 / VLAN 99 |
-| Guest-Switch | Fa0/3 | Guest-AP / VLAN 99 — 오늘 추가 예정 |
+| Guest-Switch | Fa0/3 | Guest-AP / VLAN 99 — 사용자 완료 보고 |
 
 > Section 3.B.3의 Core Gi0/2 직접 연결은 초기 구성 기록이다. 현재 구성은 DHCP Server를 Server-Switch Fa0/1에 연결한다. 두 위치에 동시에 연결하지 않는다.
 
@@ -537,7 +537,7 @@ copy running-config startup-config
 - 이 ACL은 Guest에서 들어오는 Routed Traffic을 제한한다. 같은 VLAN의 Guest 간 통신 차단이나 양방향 Stateful Firewall을 구현한 것은 아니다.
 - 현재 내부 DNS 예외는 없다. 이후 Guest DNS 설계 시 허용 정책을 별도로 검토한다.
 
-### H. Guest Wi-Fi — Setup Instructions / Verification Pending
+### H. Guest Wi-Fi — Completed per User Report / Test Evidence Pending
 
 #### Devices & Connection
 
