@@ -1,6 +1,6 @@
 # Corporate Network Setup & Troubleshooting Guide
 
-> **Last updated: 2026-10-27.** Router/PAT/DNS/VoIP의 최신 상태와 증거 검토, 남은 범위는 [Section 9](#9-edge-routing-pat-dns--voip--2026-10-27)을 참고한다. SSH 구성 범위·접근 정책·인증 및 ACL Troubleshooting은 [Section 8](#8-ssh-remote-management--troubleshooting--2026-10-27)을 참고한다. 현재 주소와 변경 전/후 비교, DHCP 설정, 상세 Troubleshooting 및 실측 결과는 [Section 7](#7-address-capacity-expansion--troubleshooting--2026-10-27)을 우선한다. Section 1의 기존 주소표와 Section 3~6은 변경 전 이력으로 보존한다.
+> **Last updated: 2026-10-27.** 최종 직원 Wi-Fi, Syslog 수신, PAT 실측 및 백업 상태는 [Section 10](#10-staff-wi-fi-syslog-pat-evidence--final-backup--2026-10-27)을 우선한다. Router/PAT/DNS/VoIP의 최신 상태와 증거 검토, 남은 범위는 [Section 9](#9-edge-routing-pat-dns--voip--2026-10-27)을 참고한다. SSH 구성 범위·접근 정책·인증 및 ACL Troubleshooting은 [Section 8](#8-ssh-remote-management--troubleshooting--2026-10-27)을 참고한다. 현재 주소와 변경 전/후 비교, DHCP 설정, 상세 Troubleshooting 및 실측 결과는 [Section 7](#7-address-capacity-expansion--troubleshooting--2026-10-27)을 우선한다. Section 1의 기존 주소표와 Section 3~6은 변경 전 이력으로 보존한다.
 >
 > **Previous update: 2026-10-26.** 최신 작업 상태, 명령어, Guest Wi-Fi 절차와 남은 작업은 [Section 5](#5-implementation-log--2026-10-26) 및 [Section 6](#6-remaining-work--next-session)을 참고한다. Section 1의 수량은 최종 설계 목표이며, Section 3~4는 초기 구성 및 장애 해결 기록이다.
 
@@ -1543,3 +1543,198 @@ Syslog는 아직 구성하지 않았으며 수신 로그를 생성/검증했다�
 
 References:
 - [Cisco Community — Packet Tracer accessing Internet](https://community.cisco.com/t5/cisco-software-discussions/packet-tracer-accessing-internet/td-p/4722181)
+
+
+---
+
+## 10. Staff Wi-Fi, Syslog, PAT Evidence & Final Backup — 2026-10-27
+
+**최종 기준:** 이 절은 Section 7~9 이후 변경 사항이다. 이전 표의 직원 Wi-Fi/Syslog 미구현, PAT 출력 대기 상태는 아래 결과로 갱신한다. 기존 주소표와 장애 기록은 이력으로 보존한다.
+
+### A. Staff Wi-Fi — Purpose and Implementation
+
+직원 무선은 내부 업무 서비스와 모의 외부망에 접근하고, Guest는 내부망 접근을 차단한다. 장비 SSH 관리는 기존 IT 유선 대역에만 허용한다.
+
+| 항목 | 최종 구성 |
+| :--- | :--- |
+| AP / Client | Staff-AP / Staff-Laptop-1 |
+| SSID | FakeCompany-Staff |
+| 보안 | WPA2-PSK / AES, Guest와 별도 Lab 암호 (실제 값 미기록) |
+| Channel | 1 설정 안내 |
+| 연결 | IT-Switch Fa0/4 ↔ Staff-AP Port 0 |
+| VLAN / Network | 60 / 192.168.2.0/25 |
+| Gateway / DNS | 192.168.2.1 / 192.168.1.2 |
+| DHCP Pool | Staff-WiFi, Start 192.168.2.10, Mask 255.255.255.128, Max Users 110 |
+| DHCP Range | 192.168.2.10~119 |
+| 관리 접근 | 기존 SSH-IT-ONLY는 .1.16/28만 허용하므로 직원 Wi-Fi SSH 차단 |
+
+- AP가 IT-Switch에 연결돼도 직원 무선은 VLAN 60이고 IT Data VLAN 40과 별개이다. 물리 스위치 이름보다 포트 VLAN이 논리적 소속을 결정한다.
+- AP 포트는 VLAN 60 하나를 전달하므로 Access. Core–IT 연결은 VLAN 40,60,140을 전달하므로 Trunk.
+- /25는 Usable 126개이며 단말 70대의 50% 성장 목표와 Gateway를 수용한다. 한 AP가 실제 105명의 사용자를 수용한다는 성능 검증은 아니다.
+- 처음 설명에 100대 Pool 예시가 있었으나 실제 안내 최종값은 **110대**이다.
+- 사용자별 802.1X/RADIUS 인증, 부서별 무선 동적 VLAN은 미구현이다.
+- 직원망의 내부 서비스 접근은 기존 Routing에 기반한다. 별도 세부 서비스 Allow-list ACL을 새로 구축한 것은 아니다.
+
+Core:
+```text
+configure terminal
+vlan 60
+ name STAFF-WIFI
+exit
+interface vlan 60
+ description STAFF-WIFI-GATEWAY
+ ip address 192.168.2.1 255.255.255.128
+ ip helper-address 192.168.1.2
+ no shutdown
+exit
+interface fastEthernet0/4
+ switchport trunk allowed vlan add 60
+exit
+end
+```
+
+IT-Switch:
+```text
+configure terminal
+vlan 60
+ name STAFF-WIFI
+exit
+interface gigabitEthernet0/1
+ switchport trunk allowed vlan add 60
+exit
+interface fastEthernet0/4
+ description TO-STAFF-AP
+ switchport mode access
+ switchport access vlan 60
+ spanning-tree portfast
+ no shutdown
+exit
+end
+```
+
+Edge-Router:
+```text
+configure terminal
+ip route 192.168.2.0 255.255.255.128 10.0.0.1
+ip access-list standard NAT-INTERNAL
+ permit 192.168.2.0 0.0.0.127
+exit
+end
+```
+
+**왜 Edge도 변경하는가:** 새 .2.x 대역은 기존 .0.x/.1.x 경로와 NAT 대상 밖이므로 복귀 Static Route와 PAT Source 대역을 추가해야 한다. Trunk는 add를 사용해 기존 허용 VLAN을 보존한다.
+
+검증:
+- 실제 Wireless0 IP **192.168.2.11** 확인. 제공 ipconfig가 중간에서 끝나 Wireless0 Mask/Gateway/DNS 전체 필드는 직접 수집하지 못했다. Bluetooth 항목의 DNS를 Wireless0 증거로 간주하지 않는다.
+- Gateway .2.1, 내부 서버 .1.2, 외부 서버 203.0.113.10에 각각 **2/2 응답**.
+- 내부 이름 intranet.fakecompany.test 접속 및 SSH .1.17 차단은 사용자 완료 보고.
+- 직원 무선 외부 HTTP의 PAT 변환은 아래 실제 출력으로 추가 확인했다.
+
+### B. Monitoring Scope — Central Syslog Collection
+
+**구현:** Core 이벤트를 DHCP-Server 192.168.1.2의 Services → SYSLOG → On으로 수집한다. 상태 대시보드, SNMP 성능 그래프, 주기적 가용성 검사, 자동 장애 알림 시스템은 이번 범위에 포함하지 않는다.
+
+Core 설정 기록:
+```text
+configure terminal
+service timestamps log datetime msec
+logging 192.168.1.2
+logging trap debugging
+logging on
+end
+show logging
+```
+
+- timestamps는 이벤트 시각 표시, logging IP는 수신 서버 지정.
+- debugging 심각도 7은 0~7 로그를 포함한다. 이 설정 자체가 debug 진단 명령을 실행하는 것은 아니다.
+- DHCP Lease/주소 할당 실패, 모든 SSH 인증 실패, 모든 ACL 차단을 자동 수집하도록 구성한 상태는 아니다. 서비스별 로그 설정과 지원 여부는 별도이다.
+- SYS-5-CONFIG_I는 설정 작업 이벤트이며 실행한 명령/변경 전후 값을 모두 기록하는 감사 이력은 아니다.
+
+**Troubleshooting — logging severity syntax**
+1. logging trap informational 입력 시 Invalid input.
+2. logging ?에서 trap 하위 명령 존재 확인.
+3. 대안으로 안내한 logging trap 6도 실제 CLI에서 거절됨. 숫자 6이 적용됐다고 기록하지 않는다.
+4. 사용자가 logging trap debugging을 적용했고 show logging에서 정상 확인.
+5. 결론: trap 전체 미지원이 아니라, 이 환경에서 시도한 두 심각도 입력은 실패하고 debugging 형식은 성공했다. 미확인 형식을 지원한다고 단정하지 않는다.
+
+실제 Core 출력:
+```text
+Syslog logging: enabled
+Trap logging: level debugging
+Logging to 192.168.1.2 (udp port 514 ... link up)
+2 message lines logged
+```
+
+**서버 수신 검증:** 제공된 SYSLOG 화면에서 Service On 및 3개 메시지 확인.
+- Source/HostName: **192.168.1.1** (Core Server VLAN SVI).
+- SYS-5-CONFIG_I 설정 이벤트 2개.
+- SYS-6-LOGGINGHOST_STARTSTOP 전송 시작 이벤트 1개.
+- 설정 모드 진입 후 end로 나온 다음 새 CONFIG_I 메시지가 서버에 수신됐다.
+- 장비 전송 설정만이 아니라 **서버 측 실제 수신**까지 확인했다.
+- 서버 화면 날짜는 03.01.1993, Core 출력은 Mar 01로 실제 작업 날짜와 다르다. 시각 동기화는 검증하지 않았다.
+- 빈 포트 shutdown 테스트는 안내했으나 실제 실행 증거는 없다. 최종 증거는 설정 이벤트로 수집했다.
+
+### C. Actual PAT Verification
+
+직원 Laptop에서 외부 HTTP 트래픽을 생성한 뒤 사용자가 제공한 Edge 출력:
+
+```text
+Pro Inside global      Inside local        Outside local      Outside global
+tcp 203.0.113.1:1027   192.168.2.11:1027   203.0.113.10:80    203.0.113.10:80
+tcp 203.0.113.1:1031   192.168.1.19:1031   203.0.113.10:80    203.0.113.10:80
+
+Total translations: 2 (0 static, 2 dynamic, 2 extended)
+Outside Interfaces: GigabitEthernet0/1
+Inside Interfaces: GigabitEthernet0/0
+Hits: 20  Misses: 8
+Expired translations: 6
+```
+
+- 직원 Wi-Fi .2.11 및 IT 유선 .1.19가 외부 IP **203.0.113.1 하나를 공유**하며 HTTP 서버 :80에 접속함을 확인.
+- Inside local은 원래 내부 주소, Inside global은 변환 주소.
+- Misses 8을 실패 연결 8개 또는 패킷 손실로 해석하지 않는다. 변환 조회의 miss 수치이다.
+- 두 연결의 동시 변환표로 PAT 동작을 입증했다. 실제 공용 Internet/Google 접속 증거는 아니다.
+
+### D. Manual Configuration Backup & Save
+
+**목적:** startup-config는 재시작용 내부 저장, TFTP 사본은 설정 복구용 별도 파일이다. 자동화나 실제 복구 완료를 뜻하지 않는다.
+
+백업 서버: **DHCP-Server 192.168.1.2 → Services → TFTP → On**.
+전화기 구성 서버 Voice-Router .4의 TFTP와 역할이 다르다.
+
+```text
+enable
+copy running-config startup-config
+copy running-config tftp:
+! Remote host: 192.168.1.2
+! Destination filename: use device-specific name below
+```
+
+| 장비 | 백업 파일명 / 계획 | 확인 상태 |
+| :--- | :--- | :--- |
+| Core-Switch | Core-Switch-final.cfg | 백업 안내, 개별 전송/파일 출력 미수집 |
+| Edge-Router | Edge-Router-final.cfg | 백업 안내, 개별 전송/파일 출력 미수집 |
+| Voice-Router | Voice-Router-final.cfg | 백업 안내, 개별 전송/파일 출력 미수집 |
+| IT-Switch | IT-Switch-final.cfg | startup-config [OK] 직접 확인, TFTP 대상/파일 안내 후 사용자 완료 보고 |
+| HR-Switch / Server-Switch | startup-config 저장 안내 | 개별 완료 출력 미수집 |
+
+- 마지막 "다 됐어"는 직전 IT-Switch TFTP 백업 안내에 대한 완료 보고로 기록한다. 이를 근거로 세 Router/Core 파일도 모두 존재한다고 추정하지 않는다.
+- TFTP 서버 파일 목록 Screenshot, 나머지 장비별 전송 성공 출력은 제공되지 않았다.
+- 복구 명령 실행 및 복원 후 동작 검증은 하지 않았다.
+- Packet Tracer File → Save As → Network-Infrastructure-Final.pkt 저장을 안내했으나 실제 저장 파일/최종 Topology Screenshot은 아직 미수집.
+- 같은 .pkt 안의 TFTP 사본은 실습상 별도 장비 백업이다. 호스트 장애에도 살아남는 독립 외부 저장소 백업을 구현한 것은 아니다.
+- TFTP는 암호화 전송이 아니므로 실제 운영에서는 백업 경로/저장소 보안과 설정 파일 내 인증 정보 보호를 별도로 고려해야 한다. 문서에는 사용자 비밀번호를 기록하지 않는다.
+
+### E. Final Project Scope & Handoff
+
+**완성 범위:** 대표 단말 기반 기업망 시뮬레이션 — 부서별 Data/Voice VLAN, 주소 용량 재설계, 중앙 DHCP/Relay, 고정 IP 분리, Core Routing, Guest 유선/무선 ACL, 대표 장비 SSH, Edge Static Routing/PAT, 내부/외부 DNS, 8대 VoIP 완료 보고, 직원 Wi-Fi, Core 중앙 Syslog 수신, IT-Switch 수동 TFTP 백업 완료 보고.
+
+**미구현/제외:** 실제 Internet, AD/Windows Server 기능, 모든 스위치의 SSH 반복 적용, Python automation, 외부 PRTG/Zabbix 연동, SNMP 대시보드/알림, 자동 백업, 복구 검증. 실제 VM 모니터링은 향후 별도 Lab으로 분리한다.
+
+**문서 정리 완료와 구분할 마지막 파일 확인:**
+- Core/Edge/Voice TFTP 백업을 수행했다면 서버 목록에서 파일 존재 확인.
+- 변경한 장비 startup-config 저장 및 최종 .pkt 저장 확인.
+- ENG-Data Pool Max Users 58, DHCP Server NIC /28, 필요 시 최종 전체 SVI/Trunk 상태 확인.
+- 사진/출력이 없는 성공 항목은 사용자 완료 보고 상태를 유지한다.
+
+사용자에게 추가 기능 확장을 요구하지 않고, 남은 항목은 최종 보관/증거 확인으로 남긴다.
