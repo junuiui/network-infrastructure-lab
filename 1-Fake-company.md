@@ -1,6 +1,6 @@
 # Corporate Network Setup & Troubleshooting Guide
 
-> **Last updated: 2026-10-27.** SSH 구성 범위·접근 정책·인증 및 ACL Troubleshooting은 [Section 8](#8-ssh-remote-management--troubleshooting--2026-10-27)을 참고한다. 현재 주소와 변경 전/후 비교, DHCP 설정, 상세 Troubleshooting 및 실측 결과는 [Section 7](#7-address-capacity-expansion--troubleshooting--2026-10-27)을 우선한다. Section 1의 기존 주소표와 Section 3~6은 변경 전 이력으로 보존한다.
+> **Last updated: 2026-10-27.** Router/PAT/DNS/VoIP의 최신 상태와 증거 검토, 남은 범위는 [Section 9](#9-edge-routing-pat-dns--voip--2026-10-27)을 참고한다. SSH 구성 범위·접근 정책·인증 및 ACL Troubleshooting은 [Section 8](#8-ssh-remote-management--troubleshooting--2026-10-27)을 참고한다. 현재 주소와 변경 전/후 비교, DHCP 설정, 상세 Troubleshooting 및 실측 결과는 [Section 7](#7-address-capacity-expansion--troubleshooting--2026-10-27)을 우선한다. Section 1의 기존 주소표와 Section 3~6은 변경 전 이력으로 보존한다.
 >
 > **Previous update: 2026-10-26.** 최신 작업 상태, 명령어, Guest Wi-Fi 절차와 남은 작업은 [Section 5](#5-implementation-log--2026-10-26) 및 [Section 6](#6-remaining-work--next-session)을 참고한다. Section 1의 수량은 최종 설계 목표이며, Section 3~4는 초기 구성 및 장애 해결 기록이다.
 
@@ -1278,3 +1278,268 @@ end
 - ENG/S/M 등 Access Switch로 SSH 반복 적용은 사용자 결정으로 생략했다.
 - 직원 Wi-Fi는 계속 연기한다.
 - 다음 작업은 Router0의 show ip interface brief / show running-config를 확인한 뒤 **모의 외부망, Routing, NAT/PAT** 구성이다. 아직 구현 또는 외부 접속 성공으로 기록하지 않는다.
+
+
+---
+
+## 9. Edge Routing, PAT, DNS & VoIP — 2026-10-27
+
+### Evidence and Current Scope
+
+이 절은 SSH 이후 진행한 작업을 정리한다. **직접 제공된 CLI 출력**과 **사용자의 "다 됐어" 완료 보고**를 구분한다. 최신 .pkt를 직접 실행하거나 미제공 Screenshot/변환표/통화 결과를 새로 검증하지 않았다. Syslog, SNMP, 직원 Wi-Fi, 설정 백업은 아직 미구현이다. Python automation은 사용자의 요청으로 이번 프로젝트 범위에서 제외한다.
+
+### A. Core–Edge Routed Link & Static Routes
+
+기존 Core Gi0/1 Trunk를 Routed Port로 변경하고 기존 2911을 Edge-Router로 사용했다.
+
+| 장비 | Port | IP / Prefix | 용도 |
+| :--- | :--- | :--- | :--- |
+| Core-Switch | Gi0/1 | 10.0.0.1/30 | Edge로 연결 |
+| Edge-Router | Gi0/0 | 10.0.0.2/30 | 내부 방향 |
+| Edge-Router | Gi0/1 | 203.0.113.1/24 | 모의 외부 서버 방향 |
+| External-Web | FastEthernet0 | 203.0.113.10/24, GW 203.0.113.1 | HTTP 및 외부 DNS |
+
+**왜:** Core는 부서 간 Routing, Edge는 외부 연결/PAT를 담당한다. /30은 두 장비용 주소 2개를 제공한다. 목적지로 가는 길과 응답의 복귀 경로가 모두 필요하다.
+
+Core 변경 기록:
+```text
+configure terminal
+interface gigabitEthernet0/1
+ description TO-EDGE-ROUTER
+ no switchport
+ ip address 10.0.0.1 255.255.255.252
+ no shutdown
+exit
+ip route 0.0.0.0 0.0.0.0 10.0.0.2
+end
+```
+
+Edge 변경 기록:
+```text
+configure terminal
+hostname Edge-Router
+interface gigabitEthernet0/0
+ description TO-CORE-SWITCH
+ ip address 10.0.0.2 255.255.255.252
+ no shutdown
+exit
+ip route 192.168.0.0 255.255.255.0 10.0.0.1
+ip route 192.168.1.0 255.255.255.0 10.0.0.1
+
+interface gigabitEthernet0/1
+ description TO-EXTERNAL-WEB
+ ip address 203.0.113.1 255.255.255.0
+ no shutdown
+exit
+end
+```
+
+- no switchport: L2 Trunk에서 L3 IP Port로 전환.
+- Default Route: 더 구체적인 경로가 없는 목적지를 Edge로 전달.
+- Edge의 두 /24 Static Route: 내부 Subnet들을 묶어 Core로 돌려보내는 요약 경로. 단말 Mask를 /24로 바꾸는 명령이 아니다.
+- 외부 서버는 Edge에 직접 연결되어 있어 이 모의 외부 대역에 도달하기 위한 Edge Default Route는 필요하지 않다.
+- 실제 Edge 출력: C 10.0.0.0/30, L 10.0.0.2/32 및 S 192.168.0.0/24, S 192.168.1.0/24 via 10.0.0.1 확인.
+- Edge→Core Ping은 .!!!!, 4/5 응답. 초기 ARP 가능성은 있으나 원인 미확정, 재실행 5/5 출력은 미수집.
+- IT PC→Edge와 외부 서버 연결 성공은 사용자 완료 보고 기준이다.
+- Guest는 사설 10.0.0.0/8이 ACL로 차단되므로 10.0.0.2 Ping을 Guest 성공 기준으로 삼지 않는다.
+
+### B. PAT & Simulated External Access
+
+External-Web을 Edge Gi0/1에 연결하고 Desktop → IP Configuration에서 위 주소를 설정했다. Services → HTTP → On.
+
+```text
+configure terminal
+ip access-list standard NAT-INTERNAL
+ permit 192.168.0.0 0.0.0.255
+ permit 192.168.1.0 0.0.0.255
+exit
+interface gigabitEthernet0/0
+ ip nat inside
+exit
+interface gigabitEthernet0/1
+ ip nat outside
+exit
+ip nat inside source list NAT-INTERNAL interface gigabitEthernet0/1 overload
+end
+```
+
+- NAT-INTERNAL은 변환할 Source를 고르는 ACL이며 인터페이스 접근 차단용으로 적용하지 않는다.
+- inside/outside는 내부/외부 방향 지정.
+- overload는 여러 단말이 외부 포트 주소 203.0.113.1을 공유하도록 한다.
+- Inside local은 내부 원래 주소, Inside global은 외부에 보이는 변환 주소, Outside global은 외부 서버 주소.
+- 검증 안내: IT 및 Guest에서 ping 203.0.113.10, Browser http://203.0.113.10, Guest→192.168.1.3 차단 유지. 직후 Edge에서 show ip nat translations / show ip nat statistics.
+- **결과:** 사용자가 전체 성공을 보고했다. 실제 PAT 변환표 및 통계 출력은 미수집.
+- 단순 외부 접속 성공만으로 PAT 변환을 입증하지 않는다. 이 구조는 왕복 Routing만으로도 통신 가능하므로 변환표 증거를 추가 수집해야 한다.
+- 203.0.113.0/24는 문서용 주소를 이용한 모의 외부망이다. 실제 ISP/Internet 또는 Google 접속은 구현하지 않았다.
+
+### C. Internal and Guest DNS
+
+DNS는 이름을 IP로 변환한다. A Record는 이름과 IPv4 주소의 연결이며, DHCP DNS Server 값은 단말이 조회할 DNS 서버 위치를 배포한다.
+
+| 구분 | DNS 제공 장비 | DNS Record | DHCP 적용 |
+| :--- | :--- | :--- | :--- |
+| 직원 내부 | DHCP-Server 192.168.1.2 | intranet.fakecompany.test → 192.168.1.3 | HR/ENG/S/M/IT Data DNS = 192.168.1.2 |
+| Guest 외부 | External-Web 203.0.113.10 | www.external.test → 203.0.113.10 | Guests DNS = 203.0.113.10 |
+
+GUI:
+1. 해당 Server → Services → DNS → **On**.
+2. Name (http:// 없이), Type A Record, Address 입력 후 **Add**하여 목록 확인.
+3. DHCP-Server → Services → DHCP → 대상 Pool DNS Server 수정 후 Save.
+4. PC/Laptop에서 Static→DHCP 재할당. ipconfig /all로 DNS 주소 확인.
+5. nslookup 이름 및 Browser의 전체 http://이름으로 검증.
+
+**Troubleshooting: Hostname unresolved**
+- 증상: IT PC가 서버 .1.2에 Ping 가능, DNS 주소도 맞고 http://192.168.1.3 접속은 되지만 이름 접속 실패.
+- 범위 좁히기: 기본 IP 통신/HTTP는 동작하므로 DNS 조회 단계 확인. Ping만으로 DNS Service 동작을 입증할 수 없다.
+- 실제 원인: 사용자가 DNS Service **Off**였음을 확인.
+- 해결: DNS On 전환.
+- 결과: 내부 이름 접속 성공 보고. 이후 네 직원 Data Pool과 Guest 외부 DNS/웹 접속, Guest 내부 차단 유지도 완료 보고.
+- 실제 nslookup 및 부서별 브라우저 Screenshot은 미수집.
+- Guest는 내부 DNS 예외 없이 외부 DNS 사용. 등록된 테스트 이름을 제공하며 실제 공용 DNS 재귀 조회를 구현한 것으로 설명하지 않는다.
+
+### D. VoIP / CME — Eight Phones Across Four Departments
+
+기존 배치는 HR/ENG/S/M/IT 각 7960 전화기 2대, 총 8대이며 Switch→Phone→PC 구조이다. PC Data와 전화 Voice는 같은 물리 연결에서 VLAN으로 구분한다.
+
+| 장비 | 연결 | 최종 IP / Gateway | 역할 |
+| :--- | :--- | :--- | :--- |
+| Voice-Router 2811 | Fa0/0 ↔ Server-Switch Fa0/3 | 192.168.1.4/28, 기본 경로 192.168.1.1 | CME/SCCP 및 전화 구성 TFTP |
+
+**지원 문제:**
+- Edge 2911에서 telephony-service ? 실행 시 % Unrecognized command.
+- 실제 사용 중인 Packet Tracer 모델/IOS에서 명령 미지원으로 판단. 실제 2911 전체가 음성 기능 미지원이라는 뜻은 아니다.
+- Edge Routing/PAT는 유지하고 별도 2811 추가.
+- 새 2811에서 telephony-service ? → <cr> 확인. Enter로 명령 실행 가능한 상태로 지원 여부 검증.
+
+Server-Switch:
+```text
+configure terminal
+interface fastEthernet0/3
+ description TO-VOICE-ROUTER
+ switchport mode access
+ switchport access vlan 50
+ spanning-tree portfast
+ no shutdown
+exit
+end
+```
+
+Voice-Router의 최종 목표 구성:
+```text
+configure terminal
+hostname Voice-Router
+interface fastEthernet0/0
+ description TO-SERVER-SWITCH
+ ip address 192.168.1.4 255.255.255.240
+ no shutdown
+exit
+ip route 0.0.0.0 0.0.0.0 192.168.1.1
+
+telephony-service
+ max-ephones 8
+ max-dn 8
+ ip source-address 192.168.1.4 port 2000
+ auto assign 1 to 8
+exit
+ephone-dn 1
+ number 1001
+exit
+ephone-dn 2
+ number 1002
+exit
+ephone-dn 3
+ number 1003
+exit
+ephone-dn 4
+ number 1004
+exit
+ephone-dn 5
+ number 1005
+exit
+ephone-dn 6
+ number 1006
+exit
+ephone-dn 7
+ number 1007
+exit
+ephone-dn 8
+ number 1008
+exit
+telephony-service
+ create cnf-files
+exit
+end
+```
+
+- CME: 전화기 등록 및 통화 제어 기능.
+- max-ephones: 등록 가능한 전화기 수. max-dn: 내선 항목 수.
+- ephone-dn / number: 내선 항목과 실제 번호 설정.
+- SCCP: 전화기와 CME의 등록/통화 제어 프로토콜. port 2000은 이 제어 연결에 사용.
+- create cnf-files: 전화기가 TFTP로 받을 구성 파일 생성.
+- 네 Voice Pool 모두 **TFTP Server = 192.168.1.4**로 Save. DHCP Option 150으로 전화기에 구성 서버를 알리는 목적이며 DNS Server 칸과 다르다.
+- 기존 DHCP Server의 TFTP Service를 전화용으로 켜는 단계가 아니다. 구성 서버는 Voice-Router .4이다.
+- auto assign은 등록 순서대로 배정한다. 1001~1008을 특정 부서/MAC에 고정한 상태는 아니다.
+
+**Troubleshooting: Configuring CM List에서 정지**
+1. 증상: 전화 화면이 Configuring CM List에서 대기, show ephone 출력 비어 있음.
+2. 진단 증거: Voice-Router Fa0/0가 **192.168.1.3/28**로 설정되어 Web Server와 중복. telephony-service에 **ip source-address 누락**.
+3. 해결: Fa0/0를 .4로 수정하고 source-address .4 port 2000 설정, create cnf-files 재실행. 네 Voice DHCP Pool TFTP .4 확인 후 대표 전화기 재시작.
+4. 결과: 실제 show ephone에서 HR 전화 등록 확인:
+```text
+ephone-1 Mac:0060.3E43.7B36
+REGISTERED in SCCP ver 12 and Server in ver 8
+IP:192.168.0.226
+button 1: dn 1 number 1001 CH1 IDLE
+```
+5. REGISTERED는 CME 등록, IDLE은 통화 대기 상태. 이것만으로 실제 통화 성공을 뜻하지 않으므로 별도로 통화 테스트.
+6. HR↔ENG 통화 성공, 나머지 총 8대 등록 및 S/M↔IT 통화 성공은 사용자 완료 보고. 8대 전체 show ephone/전화 화면은 아직 미수집.
+
+### E. Consolidated Evidence Review & Remaining Verification
+
+| 기능 | 직접 수집한 증거 | 완료 보고 / 남은 증거 |
+| :--- | :--- | :--- |
+| IP 재설계 / Guest ACL | Section 7 DHCP 화면, 단말 IP/Ping, ACL | ENG Pool 58 최종 화면 등 일부 대기 |
+| SSH | Section 8 로그인 프롬프트 및 ACL | 일부 최종 config/저장 대기 |
+| Core–Edge | Router 경로표, 4/5 Ping | IT PC 성공 보고, 재실행 Ping 출력 대기 |
+| 외부망/PAT | 구성 절차 기록 | 성공 보고, 변환표·통계·HTTP 화면 대기 |
+| 내부/Guest DNS | DNS Off 원인에 대한 사용자 확인 | 이름 접속 성공 보고, nslookup/화면 대기 |
+| VoIP | 2811 명령 지원, 최초 오류 config, HR REGISTERED 출력 | 8대·부서 간 통화 성공 보고, 전체 출력 대기 |
+| Syslog/SNMP | 없음 | 미구현 |
+| 직원 Wi-Fi | 없음 | 계획 |
+| TFTP 설정 백업 | 없음 | 맨 마지막 진행 예정 |
+
+이 표는 현재 증거의 문서 검토 결과이며 새로운 실장비/시뮬레이터 테스트를 대신하지 않는다. 사용자 요청의 최종 검증·증거 수집은 기존 자료 정리까지 수행했고, 추가 실행 및 화면 수집은 최신 .pkt 또는 실행 환경 접근이 필요하다.
+
+후속 수집 명령:
+```text
+! Core / Edge
+show ip interface brief
+show ip route
+! Edge, generate client traffic first
+show ip nat translations
+show ip nat statistics
+! Voice-Router
+show ephone
+! Switches
+show interfaces trunk
+show access-lists
+! Clients
+ipconfig /all
+nslookup intranet.fakecompany.test
+! Guest
+nslookup www.external.test
+```
+
+Syslog는 아직 구성하지 않았으며 수신 로그를 생성/검증했다고 주장하지 않는다. .pkt 저장, 장비 startup-config 저장, 최종 Screenshot 업로드도 별도 확인이 필요하다.
+
+### F. Updated Remaining Scope
+
+- **실제 Internet/google.ca:** Packet Tracer의 일반 시뮬레이션 PC/Router에서 공용 Internet으로 연결하는 방식은 지원하지 않는다. 기존 External-Web은 모의 외부망이다. 실제 접속은 별도 실제/가상 네트워크 환경 과제로 분리해야 한다.
+- **직원 Wi-Fi:** VLAN 60, 192.168.2.0/25는 이전 제안일 뿐 아직 미적용. 적용한다면 Core/Trunk/DHCP/접근 정책 외에 Edge 복귀 경로와 NAT 대상에도 새 대역 추가가 필요하다.
+- **Monitoring:** Packet Tracer 안에서 Syslog 수신 및 지원 가능한 SNMP 검증부터 범위를 정한다. 외부 PRTG/Zabbix 연동 완료로 표기하지 않는다.
+- **설정 백업:** 마지막에 대표 장비 TFTP 수동 백업과 파일 존재 확인.
+- **Python automation:** 프로젝트 완료 범위에서 제외.
+- 다음 단계마다 용어, 목적, 명령 의미와 실제 검증 기준을 함께 설명한다.
+
+References:
+- [Cisco Community — Packet Tracer accessing Internet](https://community.cisco.com/t5/cisco-software-discussions/packet-tracer-accessing-internet/td-p/4722181)
