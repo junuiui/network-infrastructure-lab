@@ -1,3 +1,9 @@
+# Original IP Address Plan — Historical
+
+[← 메인 README](readme.md) · [현재 주소 및 변경 전/후 비교](docs/addressing.md)
+
+> 이 파일은 **변경 전 주소표**입니다. 아래 표는 이력으로 보존하며, 새 설정에는 [현재 주소표](docs/addressing.md)를 사용하세요.
+
 | Subnet Name | VLAN ID | Required Hosts | Subnet Mask | Network Address | Usable IP Range | Gateway IP |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **ENG-Data** | 20 | 37 | /26 (255.255.255.192) | 192.168.0.0 | 192.168.0.1 ~ 192.168.0.62 | 192.168.0.1 |
