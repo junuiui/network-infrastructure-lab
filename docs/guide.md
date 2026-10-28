@@ -1,41 +1,66 @@
 # Step-by-Step Rebuild Guide
 
-[← 메인 README](../readme.md) · [주소표](addressing.md) · [문제 해결](troubleshooting.md) · [검증 결과](validation.md)
+[Back to main README](../readme.md) · [Address plan](addressing.md) · [Troubleshooting](troubleshooting.md) · [Test results](validation.md)
 
-> **용도:** 빈 Packet Tracer 파일에서 최종 설계를 재구축하는 절차. 기존 파일의 주소 변경 명령을 다시 적용하는 Migration Guide가 아니다. 실제 기존 장비에 그대로 덮어쓰지 않는다.
+> Start with a blank Packet Tracer file. This guide builds the final design directly. It is not a script for changing the old addresses on an existing lab.
 >
-> 최종 명령을 기존 실습 기록에서 정리했으며 이 문서 전체를 새 .pkt에서 다시 실행한 것은 아니다. 모델/버전에 따라 CLI가 다르면 `?`로 지원 형식을 확인한다. 비밀번호는 직접 정한 Lab 값으로 교체한다.
+> The commands were put together from the lab record. The full guide was not rerun from a blank file during this documentation update. Use `?` if your model or Packet Tracer version accepts different commands.
 
-## 0. 준비와 진행 원칙
+## 0. Prepare the lab
 
-- Core 3560-24PS 1대, Access 2960 6대(HR/ENG/SM/IT/Server/Guest).
-- Edge 2911 1대, Voice 2811 1대.
-- Server-PT 3대(DHCP/DNS/Syslog/TFTP, 내부 Web, 외부 Web/DNS).
-- 부서별 대표 Phone 7960 2대 및 PC, Printer. Guest 유선 PC와 Laptop.
-- AccessPoint-PT 2대, Wireless Laptop 2대(Guest/Staff). Laptop 무선 모듈 WPC300N.
-- 한 단계를 적용하고 확인한 다음 진행한다. `>`에서 enable, `#`에서 configure terminal, `(config)#`에서 설정 입력. `end`는 #로 돌아간다.
+| Item | Quantity / use |
+| :--- | :--- |
+| 3560-24PS | One core switch |
+| 2960 | Six access switches: HR, ENG, S/M, IT, Server, Guest |
+| 2911 | Edge routing and PAT |
+| 2811 | Voice router with CME |
+| Server-PT | DHCP/internal DNS/Syslog/TFTP, internal Web, external Web/DNS |
+| 7960 phones | Two per department, eight total |
+| PCs and printers | Sample clients for each department |
+| AccessPoint-PT | Guest and Staff APs |
+| Laptop-PT / WPC300N | Guest and Staff wireless clients |
 
-실제 목표 수량과 대표 배치는 다르다. [Architecture](architecture.md)와 [Addressing](addressing.md)을 먼저 읽는다.
+Use sample devices rather than the full company count. Read [Architecture](architecture.md) and [Addressing](addressing.md) first.
 
-## 1. 장비 배치와 배선
+CLI modes:
 
-[포트 맵](architecture.md)을 따라 Core Fa0/1~6을 각 Access Gi0/1에 연결한다.
-Core Gi0/1 ↔ Edge Gi0/0, Edge Gi0/1 ↔ External-Web.
-Server Fa0/1 ↔ DHCP, Fa0/2 ↔ Web, Fa0/3 ↔ Voice Fa0/0.
-Guest Fa0/3 ↔ Guest-AP Port 0, IT Fa0/4 ↔ Staff-AP Port 0.
+| Prompt | Meaning | How to enter |
+| :--- | :--- | :--- |
+| > | User EXEC | Open the CLI |
+| # | Privileged EXEC | enable |
+| (config)# | Global configuration | configure terminal |
+| (config-if)# | Interface configuration | interface ... |
 
-부서 Fa0/1~2는 Phone의 Switch 포트, Phone의 PC 포트는 PC로 연결한다. Fa0/3은 Printer. 전화 전원은 모델의 PoE 지원 또는 Physical 탭 전원 어댑터로 공급한다. 자동 케이블 선택을 이용해도 된다.
+`exit` goes back one level. `end` returns to privileged EXEC. Passwords shown as `<LAB_PASSWORD>` are placeholders; enter your own lab-only value.
 
-## 2. Core VLAN, Trunk, Gateway 및 DHCP Relay
+## 1. Place devices and connect cables
 
-- VLAN: 부서/역할별 L2 Broadcast 구역.
-- Trunk: 케이블 하나에 여러 VLAN 전달.
-- SVI: VLAN의 L3 인터페이스이며 이번에는 단말 Gateway.
-- ip routing: Core가 VLAN 간 패킷 전달.
-- ip helper-address: DHCP Broadcast를 중앙 서버로 Relay.
+Follow the [port map](architecture.md).
 
-Core CLI에 입력한다. 기존 실습의 Fa0/1~3 협상 Trunk 대신 재구축에서는 필요한 VLAN만 명시한다.
+- Core Fa0/1–6 connect to HR, ENG, S/M, IT, Server, and Guest Gi0/1.
+- Core Gi0/1 connects to Edge Gi0/0.
+- Edge Gi0/1 connects to External-Web FastEthernet0.
+- Server Fa0/1 connects to DHCP, Fa0/2 to Web, Fa0/3 to Voice Fa0/0.
+- Guest Fa0/3 connects to Guest-AP Port 0.
+- IT Fa0/4 connects to Staff-AP Port 0.
+- Department Fa0/1–2 connect to phone **Switch** ports. Connect PCs to the phone **PC** ports.
+- Department Fa0/3 connects to the printer.
 
+Use automatic cable selection if needed. Give each phone power through supported PoE or its Physical-tab power adapter.
+
+![HR phone and PC wiring](../resources/1-HR-structure.png)
+
+*The phone and PC share a cable path. Their VLAN settings separate the traffic.*
+
+## 2. Configure the core VLANs, trunks, and gateways
+
+- **VLAN:** A separate Layer 2 broadcast area.
+- **Trunk:** One link that carries several VLANs.
+- **SVI:** A VLAN interface with an IP; it is the client gateway here.
+- **ip routing:** Lets the core route between VLANs.
+- **ip helper-address:** Relays client DHCP requests to the central server.
+
+On Core:
 ```text
 enable
 configure terminal
@@ -176,12 +201,24 @@ exit
 end
 ```
 
-**확인:** `show vlan brief`, `show ip interface brief`, `show interfaces trunk`.
-아직 해당 VLAN의 활성 연결이 없으면 SVI가 down일 수 있다. 모든 단말을 연결한 후 필요한 SVI up/up을 확인한다.
+This guide sets explicit trunks and allowed VLAN lists. The older lab used negotiated trunks on Fa0/1–3.
 
-## 3. 부서 Access Switch 설정
+Check:
+```text
+show vlan brief
+show ip interface brief
+show interfaces trunk
+```
 
-Access/Data VLAN은 PC, Voice VLAN은 전화기에 사용한다. Printer 포트에는 Voice VLAN을 추가할 필요가 없다.
+An SVI may stay down until its VLAN has an active forwarding connection. Check again after adding the access switches.
+
+![HR VLAN list](../resources/1-HR-VLAN.png)
+
+*Example: Data VLAN 10 and Voice VLAN 110 are separate entries.*
+
+## 3. Configure the access switches
+
+Phone ports need both Data and Voice VLANs. A dedicated printer port only needs the Data VLAN. The Staff AP uses a separate access port in VLAN 60.
 
 ### 3.1 HR-Switch
 ```text
@@ -243,7 +280,7 @@ exit
 end
 ```
 
-### 3.3 SM-Switch
+### 3.3 S/M-Switch
 ```text
 enable
 configure terminal
@@ -354,43 +391,55 @@ exit
 end
 ```
 
-**확인:** 각 Switch에서 show vlan brief / show interfaces trunk. Phone 연결 Port는 Data/Voice VLAN을 `show interfaces fastEthernet0/1 switchport`로 확인한다.
+Check `show vlan brief` and `show interfaces trunk` on each switch. For a phone port, use:
+```text
+show interfaces fastEthernet0/1 switchport
+```
 
-## 4. 서버와 Printer 고정 IP
+The access VLAN should match the department Data VLAN, and Voice VLAN should match its phone network.
 
-Server의 Desktop → IP Configuration → Static에서 설정한다.
+## 4. Set static server and printer addresses
 
-| 장비 | IP | Mask | Gateway |
+For servers, open **Desktop → IP Configuration → Static**.
+
+| Device | IP | Mask | Gateway |
 | :--- | :--- | :--- | :--- |
 | DHCP-Server | 192.168.1.2 | 255.255.255.240 | 192.168.1.1 |
 | Web-Server | 192.168.1.3 | 255.255.255.240 | 192.168.1.1 |
-| HR Printer | 192.168.0.221 | 255.255.255.224 | 192.168.0.193 |
-| ENG Printer | 192.168.0.62 | 255.255.255.192 | 192.168.0.1 |
-| S/M Printer | 192.168.1.126 | 255.255.255.192 | 192.168.1.65 |
-| IT Printer | 192.168.1.30 | 255.255.255.240 | 192.168.1.17 |
+| HR printer | 192.168.0.221 | 255.255.255.224 | 192.168.0.193 |
+| ENG printer | 192.168.0.62 | 255.255.255.192 | 192.168.0.1 |
+| S/M printer | 192.168.1.126 | 255.255.255.192 | 192.168.1.65 |
+| IT printer | 192.168.1.30 | 255.255.255.240 | 192.168.1.17 |
 
-Printer는 Config의 해당 Ethernet/Settings 화면에서 입력한다. .1.6은 기본 serverPool 전용으로 비워두고 고정 서버에 할당하지 않는다. HR .220과 IT .28도 나중 관리 SVI용으로 비워둔다.
+Use the printer Config/Ethernet and Settings pages for its IP, mask, and gateway.
 
-Web-Server → Services → HTTP → On. DNS를 쓰기 전에 IP로 페이지가 열리는지 확인한다.
+Reserve .1.6 for serverPool if it is kept. Reserve .1.28 for IT-Switch and .0.220 for HR-Switch. Do not give those addresses to other devices.
 
-## 5. 중앙 DHCP Pool
+On Web-Server, turn **Services → HTTP → On**. Test IP-based HTTP before testing names.
 
-DHCP-Server → Services → DHCP → On.
-[최종 Pool 표](addressing.md)의 Start/Mask/Gateway/Max Users를 그대로 입력하고 신규 Pool은 Add, 기존 Pool 변경은 Save한다.
+## 5. Add the central DHCP pools
 
-- 직원 HR/ENG/S/M/IT Data 및 Staff-WiFi DNS: **192.168.1.2**.
-- Guests DNS: **203.0.113.10**.
-- 네 Voice Pool TFTP Server: **192.168.1.4**.
-- 기본 serverPool은 제거 가능하면 제거. 이 Lab과 동일하게 유지한다면 Start .1.6, Mask /28, GW .1.1, Max 1로 제한한다.
-- ENG-Data는 Max **58** (.2~59)로 설정해 Printer .62와 분리한다.
-- Staff-WiFi는 Start .2.10, Mask /25, GW .2.1, Max **110**.
+On DHCP-Server, open **Services → DHCP → On**. Use the [final pool table](addressing.md).
 
-PC Desktop → IP Configuration → DHCP. 기존 설정이 남았으면 Static을 선택했다가 DHCP를 선택한다.
-부서별 PC가 [주소표](addressing.md)의 IP/Mask/GW를 받는지, 자신의 Gateway와 .1.2에 Ping 되는지 확인한다.
+- Click **Add** for a new pool or **Save** for an existing pool.
+- Staff Data and Staff-WiFi DNS: **192.168.1.2**.
+- Guest DNS: **203.0.113.10**.
+- All four Voice pools TFTP: **192.168.1.4**.
+- ENG-Data Max Users: **58**, giving .0.2–59.
+- Staff-WiFi: start .2.10, /25, gateway .2.1, **110 users**.
+- Remove the default serverPool if possible. To match this lab when it must remain, use start .1.6, /28, gateway .1.1, Max Users 1.
 
-## 6. Guest ACL
+On each PC, choose **Desktop → IP Configuration → DHCP**. To refresh an old lease, select Static, then DHCP.
 
-Core에서 적용한다. DHCP 허용이 내부 차단보다 앞에 있어야 한다.
+Check IP, mask, gateway, and server using `ipconfig /all`. Ping the gateway and 192.168.1.2 from a staff client.
+
+![DHCP configuration screen during the address changes](../resources/dhcp-server-pool-fixed.png)
+
+*Use this image to locate the fields. Its values are from the middle of the migration. Use the final table, not the screenshot, for the new build.*
+
+## 6. Apply the Guest ACL
+
+The core must allow DHCP before blocking private destinations. Apply the ACL inbound on Guest VLAN 99.
 
 ```text
 configure terminal
@@ -408,11 +457,13 @@ exit
 end
 ```
 
-Guest는 .1.193 Ping 성공, .1.2/.1.3 Ping 실패가 정상. Core show access-lists에서 deny 카운터를 확인한다. 실패만 보고 ACL 동작으로 단정하지 말고 Gateway 정상과 카운터를 함께 본다.
+From Guest, Ping .1.193 should pass. Pings to .1.2 and .1.3 should fail. Check `show access-lists` for deny matches.
 
-## 7. Core–Edge Routing 및 모의 외부 서버
+A failed Ping alone does not prove an ACL block. Check the working gateway and counters too.
 
-Core는 외부로 기본 경로, Edge는 내부로 복귀 경로가 필요하다. Core Gi0/1은 Trunk가 아니라 Routed Port로 만든다.
+## 7. Set up routing and the external test server
+
+Both directions need a route. Core needs a path to the edge, and the edge needs return paths to internal networks.
 
 ### Core
 ```text
@@ -426,6 +477,8 @@ exit
 ip route 0.0.0.0 0.0.0.0 10.0.0.2
 end
 ```
+
+`no switchport` turns Gi0/1 into a routed port. The /30 connects the two devices. The default route handles destinations the core does not know more specifically.
 
 ### Edge
 ```text
@@ -448,14 +501,21 @@ ip route 192.168.2.0 255.255.255.128 10.0.0.1
 end
 ```
 
-External-Web → Desktop → IP Configuration: .113.10 /24, Gateway .113.1 (전체 주소 203.0.113.x).
-Services → HTTP → On.
+The return routes point to the core. They do not change client masks.
 
-**검증:** Edge ping 10.0.0.1 및 203.0.113.10; IT PC ping 10.0.0.2. show ip route에서 C/L/S 확인. Guest의 10.0.0.2 Ping은 ACL 차단 대상이다.
+Set External-Web to **203.0.113.10**, mask **255.255.255.0**, gateway **203.0.113.1**. Turn **Services → HTTP → On**.
 
-## 8. PAT
+Check:
 
-여러 내부 단말이 Edge의 외부 주소 하나를 공유하도록 한다. 이 ACL은 허용/차단 정책이 아니라 변환할 Source 선택이다.
+- Edge: Ping 10.0.0.1 and 203.0.113.10.
+- IT PC: Ping 10.0.0.2.
+- Edge/Core: `show ip route`.
+
+C means connected, L means the local interface IP, and S means static route. Guest Ping to 10.0.0.2 is expected to be blocked.
+
+## 8. Add PAT
+
+PAT lets inside clients share the edge's outside address. The ACL selects sources for translation.
 
 ```text
 configure terminal
@@ -474,37 +534,39 @@ ip nat inside source list NAT-INTERNAL interface gigabitEthernet0/1 overload
 end
 ```
 
-직원/Guest Browser에서 http://203.0.113.10을 열고 Edge에서 바로 확인한다.
+Open `http://203.0.113.10` from an IT PC and later from Staff Wi-Fi. Immediately check:
 ```text
 show ip nat translations
 show ip nat statistics
 ```
 
-Inside local은 내부 주소, Inside global은 203.0.113.1이어야 한다. 외부 페이지 성공만으로 변환을 입증하지 말고 표까지 확인한다.
+Inside local should show client addresses. Inside global should show **203.0.113.1**. Check the table even if the website opens; web access alone does not prove translation.
 
-## 9. 내부 및 외부 DNS
+## 9. Set up internal and external DNS
 
-각 서버 Services → DNS → **On**, Type A Record 입력 후 **Add**한다. 입력칸에만 남아 있으면 등록된 것이 아니다.
+On each server, open **Services → DNS → On**. Add an A record and click **Add**.
 
-| 서버 | Name | Address |
+| Server | Name | Address |
 | :--- | :--- | :--- |
-| DHCP-Server .1.2 | intranet.fakecompany.test | 192.168.1.3 |
-| External-Web .113.10 | www.external.test | 203.0.113.10 |
+| DHCP-Server, 192.168.1.2 | intranet.fakecompany.test | 192.168.1.3 |
+| External-Web, 203.0.113.10 | www.external.test | 203.0.113.10 |
 
-직원/Guest DHCP 갱신 후 ipconfig /all로 DNS 확인. 직원은 내부 이름 HTTP, Guest는 외부 이름 HTTP 성공 및 내부 서버 Ping 차단을 검증한다.
+Do not put `http://` in the DNS record name. Check that the record is in the list.
+
+Renew leases after changing the DHCP DNS field. On a staff PC:
 ```text
 nslookup intranet.fakecompany.test
 ```
-이 명령은 직원 PC에서 실행한다. Guest에서는 www.external.test를 조회한다. IP HTTP는 되는데 이름만 실패하면 DNS 서비스 On/서버 주소/레코드를 차례로 확인한다.
 
+Then open `http://intranet.fakecompany.test`. On Guest, look up `www.external.test` and open its HTTP page.
 
-## 10. 대표 장비 SSH
+If IP-based HTTP works but the name fails, check the client DNS address, DNS Service On, and record. This lab's first failure was DNS Service Off.
 
-먼저 직접 CLI에서 설정한다. RSA 생성 전에 hostname/domain-name이 필요하다. <LAB_PASSWORD>는 장비별 Lab 암호로 바꾼다.
+## 10. Configure SSH on sample devices
 
-### 10.1 관리 IP
+### 10.1 Add management IPs
 
-Core는 기존 VLAN 40 .1.17을 사용한다.
+Core already has **192.168.1.17** on VLAN 40.
 
 IT-Switch:
 ```text
@@ -528,12 +590,11 @@ ip default-gateway 192.168.0.193
 end
 ```
 
-L2 Switch의 관리 SVI는 스위치 자체의 주소이며 PC Gateway를 대체하지 않는다. default-gateway는 다른 Subnet의 IT 관리자에게 응답하는 경로이다.
+These are the Layer 2 switches' own addresses. Their default gateways allow replies to admins in another subnet. Client gateways stay on the core.
 
-### 10.2 각 장비 계정과 SSH
+### 10.2 Add the local account, RSA key, and ACL
 
-Core/IT/HR 각각 실행한다. hostname은 앞 단계에서 설정했다.
-
+On Core, IT, and HR, after setting the hostname:
 ```text
 configure terminal
 ip domain-name fakecompany.lab
@@ -545,9 +606,9 @@ exit
 crypto key generate rsa
 ```
 
-크기를 물으면 2048 입력. 기존 키가 있다면 재생성 전 확인한다. 이 가이드는 새 장비 기준이다.
+At the RSA size prompt, enter **2048**. Check existing keys before replacing them on an old lab. This guide assumes new devices.
 
-IT/HR:
+On IT and HR:
 ```text
 ip ssh version 2
 line vty 0 15
@@ -559,8 +620,7 @@ exit
 end
 ```
 
-Core에서는 아래와 같이 수집된 구간인 **line vty 0 4**에 적용한다.
-
+On Core:
 ```text
 ip ssh version 2
 line vty 0 4
@@ -572,54 +632,73 @@ exit
 end
 ```
 
-Core show running-config에 추가 VTY 구간이 있으면 그 구간에도 동일 설정을 적용한다.
+If the core has another VTY range, apply the same policy there.
 
-- login local은 해당 장비의 계정 인증.
-- transport input ssh는 SSH만 허용.
-- VTY는 원격 접속 자리이며 0~15는 16개 라인이다.
-- ACL Source는 **192.168.1.16/28**이다. .0/28을 넣으면 IT PC가 차단된다.
+- `login local` checks this device's local account.
+- `transport input ssh` limits these lines to SSH.
+- `access-class` checks the source subnet.
+- `exec-timeout 5 0` closes idle sessions after five minutes.
+- VTY 0–15 selects 16 remote lines, not physical ports.
+- The permit must be **192.168.1.16/28**, not .1.0/28.
 
-검증:
+Check:
 ```text
 show ip ssh
 show access-lists
 ```
-IT PC에서 ssh -l netadmin 192.168.1.17, .1.28, .0.220 로그인. HR/S/M/Staff에서 같은 접속은 차단. 비밀번호는 화면에 표시되지 않는다. 실제 암호/해시를 증거 문서에 붙이지 않는다.
 
-## 11. Guest 및 Staff Wi-Fi
+From an IT PC, run:
+```text
+ssh -l netadmin 192.168.1.17
+ssh -l netadmin 192.168.1.28
+ssh -l netadmin 192.168.0.220
+```
 
-AccessPoint-PT 두 대의 Config에서 Port 0 On, 무선 Port 1 On으로 설정한다.
+Run one session at a time and exit before the next. HR/S/M/Staff clients should be blocked. Password characters are not shown while typing. Do not publish passwords or hashes in the test record.
 
-| 설정 | Guest | Staff |
+## 11. Add Guest and Staff Wi-Fi
+
+Connect Guest-AP to Guest Fa0/3 and Staff-AP to IT Fa0/4. Those access ports and their uplinks were set in Steps 2–3.
+
+| Setting | Guest | Staff |
 | :--- | :--- | :--- |
 | SSID | FakeCompany-Guest | FakeCompany-Staff |
 | Channel | 6 | 1 |
-| Authentication / Encryption | WPA2-PSK / AES | WPA2-PSK / AES |
-| Password | Lab 전용 암호 | Guest와 다른 Lab 암호 |
-| 연결 포트 | Guest Fa0/3 Access 99 | IT Fa0/4 Access 60 |
+| Authentication | WPA2-PSK | WPA2-PSK |
+| Encryption | AES | AES |
+| Password | Lab-only value | Different lab-only value |
 
-위 VLAN/Trunk 설정은 단계 2~3에 포함했다. 기존 파일에 Staff VLAN을 추가할 때는 Core Fa0/4와 IT Gi0/1 양쪽에 switchport trunk allowed vlan **add 60**을 사용해 기존 40,140을 보존한다.
+On AccessPoint-PT, turn wired **Port 0** and wireless **Port 1 On**.
 
-Laptop Physical에서 전원 Off → 유선 모듈 제거 → WPC300N 장착 → On.
-Desktop → PC Wireless → Connect/Refresh → 해당 SSID → 암호 입력.
-Desktop → IP Configuration → Wireless0 → DHCP.
+On each laptop:
 
-| 검증 | Guest | Staff |
+1. Turn power Off in Physical.
+2. Replace the wired module with WPC300N.
+3. Turn power On.
+4. Open **Desktop → PC Wireless**, refresh, choose the SSID, and enter the password.
+5. Choose **IP Configuration → Wireless0 → DHCP**.
+
+For adding Staff VLAN 60 to an existing lab, use `switchport trunk allowed vlan add 60` at **both** Core Fa0/4 and IT Gi0/1. It keeps the older allowed VLANs.
+
+| Check | Guest | Staff |
 | :--- | :--- | :--- |
-| 주소 | .1.194~254 /26 | .2.10~119 /25 |
+| Address | .1.194–254 /26 | .2.10–119 /25 |
 | Gateway | .1.193 | .2.1 |
 | DNS | 203.0.113.10 | 192.168.1.2 |
-| 내부 .1.3 Ping | 차단 | 성공 |
-| 외부 HTTP | 성공 | 성공 |
-| Core SSH | 차단 | 차단 |
+| Internal server Ping | Blocked | Pass |
+| External HTTP | Pass | Pass |
+| Core SSH | Blocked | Blocked |
 
-Staff는 내부 이름 HTTP도 확인한다. 양쪽의 DHCP/Wireless0 전체 출력과 AP 설정은 별도로 수집한다.
+Staff must also open the internal website by name. Collect the full Wireless0 settings.
 
-## 12. Voice-Router / 전화 8대
+![Staff and Guest AP placement](../resources/final.png)
 
-Edge 2911에서 전화 기능을 강제로 설정하지 않는다. 별도 2811에서 telephony-service ?가 <cr>을 반환하는지 확인한다.
+*Staff and Guest use separate APs and VLANs. The Staff AP uses a spare IT switch port.*
 
-Voice-Router:
+## 12. Set up CME and eight phones
+
+Use the separate 2811. Confirm `telephony-service ?` returns `<cr>`.
+
 ```text
 enable
 configure terminal
@@ -667,25 +746,29 @@ exit
 end
 ```
 
-- CME는 전화 등록/제어.
-- ip source-address는 전화기가 접속할 제어 주소, port 2000은 SCCP.
-- ephone-dn은 내선 항목, number는 번호.
-- auto assign은 등록 순서에 따라 자동 배정하므로 부서와 번호를 고정하지 않는다.
-- create cnf-files는 전화기 구성 파일 생성.
+| Command | Why |
+| :--- | :--- |
+| max-ephones / max-dn | Set phone and extension limits |
+| ip source-address ... port 2000 | Set the SCCP registration address |
+| ephone-dn / number | Create each extension |
+| auto assign | Assign entries in registration order |
+| create cnf-files | Make files for phones to download |
 
-네 Voice Pool의 **TFTP Server .1.4**를 다시 확인한다. Phone 전원을 재시작해 새 DHCP/구성을 받는다.
+Check **TFTP Server 192.168.1.4** in all four Voice pools. Restart phones to get the new DHCP/config information.
+
 ```text
 show ephone
 ```
 
-8대 REGISTERED와 부서별 Voice IP 확인. HR↔ENG 및 S/M↔IT의 **실제로 표시된 내선**을 호출하고 상대가 수화기를 들어 연결/종료한다.
-Configuring CM List에서 멈추면 .1.4가 아닌 Web .1.3 중복, CME source-address 누락, DHCP TFTP 값부터 확인한다.
+Check eight REGISTERED entries and the correct Voice subnet. Use the number displayed on the destination phone, call from another department, pick up, confirm the connection, and hang up. Test HR–ENG and S/M–IT.
 
-## 13. 중앙 Syslog
+If a phone stays at Configuring CM List, check for duplicate .1.3, missing CME source-address, and the DHCP TFTP value.
 
-DHCP-Server → Services → SYSLOG → On.
+## 13. Collect core Syslog events
 
-Core:
+On DHCP-Server, open **Services → SYSLOG → On**.
+
+On Core:
 ```text
 configure terminal
 service timestamps log datetime msec
@@ -696,56 +779,60 @@ end
 show logging
 ```
 
-이 환경에서 informational 및 숫자 6 입력은 거절됐고 debugging은 작동했다.
-debugging(7)은 0~7 수준을 전송하며 debug 진단을 실행하는 명령은 아니다.
+In this environment, `informational` and numeric `6` were rejected. `debugging` worked. It sets level 7 and includes levels 0–7; it does not turn on separate debug commands.
 
-테스트:
+Create a configuration event:
 ```text
 configure terminal
 end
 ```
-서버 SYSLOG 화면에 새 CONFIG_I 이벤트가 들어오는지 확인한다. Core show logging의 전송 기록만으로 수신까지 확정하지 않는다.
-이벤트 수집 범위이며 성능 그래프/자동 알림이 아니다. 장비 시각이 실제 날짜와 다를 수 있다.
 
-## 14. 저장과 TFTP 백업
+Check the server for a new CONFIG_I message. The sending config alone is not proof of reception.
 
-DHCP-Server → Services → TFTP → On.
-변경한 각 Switch/Router에서:
+This is event collection, not a performance dashboard or automatic alert system. The simulator clock may differ from the real date.
+
+## 14. Save and back up
+
+On DHCP-Server, open **Services → TFTP → On**.
+
+On every changed switch/router:
 ```text
 copy running-config startup-config
 ```
 
-대표 장비 Core/Edge/Voice/IT에서:
+On sample devices:
 ```text
 copy running-config tftp:
 ```
-Remote host는 192.168.1.2. 파일명은 장비별로 구분한다.
 
-| 장비 | 파일명 |
+Enter remote host **192.168.1.2**, then the matching file name.
+
+| Device | File name |
 | :--- | :--- |
 | Core | Core-Switch-final.cfg |
 | Edge | Edge-Router-final.cfg |
 | Voice | Voice-Router-final.cfg |
 | IT | IT-Switch-final.cfg |
 
-전송 완료 메시지와 서버 TFTP 파일 목록을 확인한다. 내부 저장 성공과 원격 전송 성공은 별개이다. 실제 복구/덮어쓰기는 이 가이드의 필수 단계가 아니다.
+Check the transfer message and TFTP server file list. Startup save and remote backup are separate actions.
 
-File → Save As로 최종 .pkt 저장. 저장소의 기존 최종 파일명은 [fake-company-final.pkt](../fake-company-final.pkt)이다. 새 실습은 별도 이름으로 저장해 원본을 보존한다.
+Use **File → Save As** to save your new .pkt. The repository's saved final file is [fake-company-final.pkt](../fake-company-final.pkt). Keep a new build under its own name.
 
-## 15. 최종 검증 및 보관
+A restore test is not part of this procedure. If you add one, use a copy and document the result.
 
-1. 모든 대표 단말의 IP/Mask/GW/DNS와 Printer 중복 방지 확인.
-2. 직원은 내부 HTTP 성공, Guest는 외부 HTTP 성공/내부 차단.
-3. IT SSH 허용, 비IT SSH 차단 및 ACL 카운터 확인.
-4. Edge 변환표에서 IT/Staff 주소의 PAT 확인.
-5. 전화 8대 등록 및 부서 간 통화 확인.
-6. Syslog 서버의 새 이벤트 수신 확인.
-7. TFTP 파일 존재, startup-config, 최종 .pkt 저장 확인.
-8. 실제 출력/화면을 [검증 표](validation.md)와 비교해 기록.
+## 15. Final checks
 
-이 문서의 기대 결과는 새 재구축의 합격 기준이다. 기존 프로젝트의 완료 증거와 동일시하지 않는다.
-기존 주소 변경 및 실패 이력은 [Addressing](addressing.md)과 [Troubleshooting](troubleshooting.md)에 있다.
+1. Check sample client IP, mask, gateway, DNS, and no printer overlap.
+2. Staff internal HTTP passes. Guest external HTTP passes and internal access is blocked.
+3. IT SSH passes. Non-IT SSH is blocked, with ACL matches.
+4. Edge PAT entries show wired IT and Staff Wi-Fi.
+5. Eight phones register and calls connect between departments.
+6. Syslog server receives a new event.
+7. TFTP files, startup configs, and final .pkt are saved.
+8. Record the actual output using [the test page](validation.md).
+
+These are expected results for a new build. They do not turn uncollected results from the original lab into confirmed evidence.
 
 ---
 
-[← 메인 README](../readme.md) · [구성도](architecture.md) · [검증 결과](validation.md)
+[Back to main README](../readme.md) · [Architecture](architecture.md) · [Troubleshooting](troubleshooting.md) · [Test results](validation.md)

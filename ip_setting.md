@@ -1,8 +1,8 @@
-# Original IP Address Plan — Historical
+# Original IP Address Plan
 
-[← 메인 README](readme.md) · [현재 주소 및 변경 전/후 비교](docs/addressing.md)
+[Back to main README](readme.md) · [Current address plan](docs/addressing.md)
 
-> 이 파일은 **변경 전 주소표**입니다. 아래 표는 이력으로 보존하며, 새 설정에는 [현재 주소표](docs/addressing.md)를 사용하세요.
+> Historical table. These are the addresses before the expansion. Use [the current plan](docs/addressing.md) for the final setup.
 
 | Subnet Name | VLAN ID | Required Hosts | Subnet Mask | Network Address | Usable IP Range | Gateway IP |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -16,3 +16,4 @@
 | **Server Farm** | 50 | 6 | /29 (255.255.255.248) | 192.168.1.0 | 192.168.1.1 ~ 192.168.1.6 | 192.168.1.1 |
 | **IT-Data** | 40 | 6 | /29 (255.255.255.248) | 192.168.1.8 | 192.168.1.9 ~ 192.168.1.14 | 192.168.1.9 |
 | **IT-Voice** | 140 | 5 | /29 (255.255.255.248) | 192.168.1.16 | 192.168.1.17 ~ 192.168.1.22 | 192.168.1.17 |
+
