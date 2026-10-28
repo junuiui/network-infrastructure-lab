@@ -7,10 +7,11 @@
 | Label | Meaning |
 | :--- | :--- |
 | Output checked | CLI text or a screenshot was supplied for that result |
-| Reported complete | The test was reported successful without the individual raw result |
+| Owner-tested | The lab owner explicitly confirmed a hands-on test; a full capture may not be saved |
+| Reported complete | A successful result was reported without the individual raw result |
 | Pending | The specific result was not supplied |
 
-The .pkt was not rerun during this documentation update. Ping counts below are the actual counts from the supplied output; many tests were stopped with Ctrl+C.
+The documentation assistant did not rerun the .pkt. The lab owner later ran the IT-Switch restore and supplied its CLI output. Ping counts below are the actual counts from the supplied output; many tests were stopped with Ctrl+C.
 
 ## Address and connectivity tests
 
@@ -70,7 +71,7 @@ The PC login text did not include source IPs; the source roles follow the lab's 
 | Internal DNS across four Data pools | Name-based Web access successful after DNS On | Reported complete |
 | Guest external DNS and HTTP | External name works, internal access blocked | Reported complete |
 | HR phone | .0.226, MAC 0060.3E43.7B36, extension 1001 REGISTERED | Output checked |
-| All phones | Eight registered; HR–ENG and S/M–IT calls | Reported complete |
+| All phones | Eight registrations and HR–ENG / S/M–IT calls directly tested by the lab owner | Owner-tested; function complete |
 | Staff internal DNS and SSH restriction | Web name works; Core SSH denied | Reported complete |
 
 ## PAT output
@@ -100,10 +101,62 @@ The device timestamps did not match the real date. Clock synchronization was not
 | Item | Status |
 | :--- | :--- |
 | IT startup-config | [OK] output checked |
-| IT TFTP copy | Reported complete |
-| Core / Edge / Voice TFTP files | Individual transfer/file-list checks pending |
-| [fake-company-final.pkt](../fake-company-final.pkt) | Repository file exists |
-| Reopen final .pkt / restore a config | Not performed in this documentation pass |
+| IT TFTP copy | 1,979-byte upload checked |
+| Core / Edge / Voice backup task | Owner confirmed complete; individual captures not supplied |
+| IT running-config restore | 1,979-byte download, hostname restoration, SVI/ACL and SSH checked |
+| [fake-company-final.pkt](../fake-company-final.pkt) | Repository file exists; not independently rerun by the documentation assistant |
+| Erased-device / reboot recovery | Not tested; outside this restore test |
+
+
+## IT-Switch backup and restore test
+
+The supplied CLI output confirms a successful TFTP backup and a restore into the running configuration.
+
+| Check | Actual result | Status |
+| :--- | :--- | :--- |
+| Save startup-config | Building configuration... [OK] | Output checked |
+| Upload IT-Switch-final.cfg to 192.168.1.2 | [OK - 1979 bytes] | Output checked |
+| Change hostname | IT-Switch → RESTORE-TEST | Output checked |
+| Read the backup into running-config | [OK - 1979 bytes] | Output checked |
+| Restore hostname | Prompt returned to IT-Switch# | Output checked |
+| Management SVI | VLAN 40, 192.168.1.28, up/up | Output checked |
+| SSH ACL | Permit 192.168.1.16 0.0.0.15, then deny any | Output checked |
+| Client Ping to 192.168.1.28 | 2/3 replies; first request timed out | Replies checked |
+| Client SSH to 192.168.1.28 | Login reached IT-Switch# | Output checked |
+
+Backup output:
+
+```text
+IT-Switch#copy running-config tftp:
+Address or name of remote host []? 192.168.1.2
+Destination filename [IT-Switch-confg]? IT-Switch-final.cfg
+Writing running-config...!!
+[OK - 1979 bytes]
+1979 bytes copied in 0 secs
+```
+
+Restore output:
+
+```text
+IT-Switch(config)#hostname RESTORE-TEST
+RESTORE-TEST(config)#end
+RESTORE-TEST#copy tftp: running-config
+Address or name of remote host []? 192.168.1.2
+Source filename []? IT-Switch-final.cfg
+Destination filename [running-config]?
+
+Accessing tftp://192.168.1.2/IT-Switch-final.cfg...
+Loading IT-Switch-final.cfg from 192.168.1.2: !
+[OK - 1979 bytes]
+1979 bytes copied in 0 secs
+IT-Switch#
+```
+
+The restored VLAN 40 interface was 192.168.1.28 and up/up. The ACL output still showed permit and deny entries, with 16 matches each. Those counters confirm the entries were present; they do not prove a new denied login was tested after the restore.
+
+This test used **copy tftp: running-config**, which merges the file into the active configuration. The hostname changed back, proving that the downloaded file applied a saved value. The IP and ACL checks show the expected configuration was present afterward; those settings were not deliberately removed before the test.
+
+This was not an erased-device rebuild, a full configuration replacement, or a reboot recovery test. The first Ping timeout is recorded as observed; its cause was not confirmed. Successful retrieval also proves this backup file was present and readable on the server, even without a file-list screenshot.
 
 ## Screenshot references
 
@@ -117,10 +170,12 @@ The [screenshot index](../resources/readme.md) labels the older images. The DHCP
 
 - [ ] Confirm ENG-Data Max Users is saved as 58.
 - [ ] Capture the DHCP server NIC /28 and any remaining printer/final-config details.
-- [ ] Confirm individual Core, Edge, and Voice TFTP files if those copies were run.
+- [x] Close the backup task based on the lab owner's direct confirmation; keep uncaptured file listings distinct from raw evidence.
 - [ ] Check saved startup configs and the final .pkt state.
-- [ ] Capture all eight phone registrations and their actual numbers if needed.
-- [ ] Run a restore test in a separate copy if recovery is to be claimed.
+- [x] Close eight-phone registration and call testing based on the lab owner's hands-on confirmation.
+- [x] Verify an IT-Switch running-config restore using the supplied CLI output.
+- [ ] Optional evidence only: collect full phone and non-IT-switch backup listings if needed.
+- [ ] Optional extended test: erased-device or reboot recovery, only if that scope is later claimed.
 
 Unchecked items are missing evidence or test scope, not automatic failure findings.
 

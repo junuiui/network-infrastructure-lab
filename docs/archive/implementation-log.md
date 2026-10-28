@@ -1188,3 +1188,20 @@ The resource images include early HR wiring/VLANs, core links, the router additi
 ---
 
 [Back to main README](../../readme.md) · [Current guide](../guide.md) · [Current test results](../validation.md)
+
+## 11. Backup and restore closeout
+
+This update records new evidence after the earlier archive sections. Statements above about an untested restore describe the earlier state.
+
+- The lab owner explicitly confirmed all eight phone registrations and interdepartment calls were tested successfully.
+- The lab owner confirmed the backup task was complete. Full non-IT-switch transfer/file listings were not supplied.
+- IT-Switch startup save returned [OK].
+- Upload of IT-Switch-final.cfg to 192.168.1.2 returned [OK - 1979 bytes].
+- The hostname was changed to RESTORE-TEST.
+- copy tftp: running-config downloaded the same file, returned [OK - 1979 bytes], and changed the prompt back to IT-Switch#.
+- VLAN 40 was 192.168.1.28 up/up. SSH-IT-ONLY retained the correct permit/deny entries.
+- IT PC Ping returned 2/3 replies, with the first request timing out. SSH reached IT-Switch#.
+
+This closes the sample restore test as **output checked**. It tests a running-config merge and one deliberately changed value, not a full rebuild or reboot recovery. The successful download directly confirms the IT backup file was readable on TFTP.
+
+[Full restore evidence](../validation.md#it-switch-backup-and-restore-test) · [Restore steps](../guide.md)

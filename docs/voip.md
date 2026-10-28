@@ -136,7 +136,7 @@ REGISTERED confirms registration. IDLE means the phone is waiting for a call; it
 4. Pick up on ENG and confirm the connected state, then hang up.
 5. Repeat between S/M and IT.
 
-All eight registrations and both department-pair call tests were reported complete. Only the sample HR registration output was collected. See [Validation](validation.md).
+The lab owner confirmed they directly tested all eight registrations and both department-pair calls successfully. This closes the functional phone test. The saved CLI evidence contains the sample HR registration, not a full eight-phone listing. See [Validation](validation.md).
 
 ---
 

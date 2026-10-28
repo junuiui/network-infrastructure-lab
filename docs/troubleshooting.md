@@ -224,8 +224,16 @@ The server received three core messages. The earlier numeric alternative was not
 
 Staff Wi-Fi, Guest wireless checks, actual PAT entries, and Syslog reception are complete at the evidence levels shown in [Validation](validation.md). The final .pkt exists in the repository.
 
-Some saved settings, backup files, and restore results remain unchecked. They are not marked as failures or invented as completed tests.
+Some final settings still lack separate captures. The later phone/backup confirmation and successful sample restore are recorded below; missing raw captures are not treated as failures.
 
 ---
 
 [Back to main README](../readme.md) · [Rebuild guide](guide.md) · [Test results](validation.md)
+
+## Backup recovery check
+
+A deliberate hostname change to RESTORE-TEST was reverted by reading IT-Switch-final.cfg from TFTP into running-config. Upload and download both reported 1,979 bytes. Management IP/ACL checks and SSH login passed; Ping showed one initial timeout followed by two replies.
+
+This is a successful sample running-config restore, not a full replacement or boot recovery test. Phone and backup completion were also directly confirmed by the lab owner. See [restore evidence](validation.md#it-switch-backup-and-restore-test).
+
+[Back to main README](../readme.md)

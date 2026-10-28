@@ -818,7 +818,43 @@ Check the transfer message and TFTP server file list. Startup save and remote ba
 
 Use **File → Save As** to save your new .pkt. The repository's saved final file is [fake-company-final.pkt](../fake-company-final.pkt). Keep a new build under its own name.
 
-A restore test is not part of this procedure. If you add one, use a copy and document the result.
+### 14.1 Test an IT-Switch restore
+
+Save a separate .pkt copy before testing. Confirm IT-Switch-final.cfg exists on TFTP and was saved with hostname IT-Switch. Do not overwrite that file after making the temporary hostname change.
+
+On IT-Switch's direct console:
+
+```text
+enable
+configure terminal
+hostname RESTORE-TEST
+end
+copy tftp: running-config
+```
+
+Answer remote host **192.168.1.2**, source **IT-Switch-final.cfg**, and press Enter for destination **running-config**.
+
+Check that the prompt returns to IT-Switch#, then run:
+
+```text
+show ip interface brief
+show access-lists
+```
+
+Expect VLAN 40 **192.168.1.28 up/up** and SSH-IT-ONLY permit **192.168.1.16 0.0.0.15** before deny any.
+
+From an IT PC:
+
+```text
+ping 192.168.1.28
+ssh -l netadmin 192.168.1.28
+```
+
+The actual test uploaded and downloaded **1,979 bytes**, restored the hostname, retained the expected SVI/ACL, and allowed SSH login. Ping replied to 2/3 requests after an initial timeout.
+
+This command merges the file into running-config. It is not a full replacement, erased-device rebuild, or reboot test. After checking the result, save the desired startup configuration and .pkt copy if you want to keep it. The transcript did not include a post-restore save/reboot result.
+
+See [the actual evidence](validation.md#it-switch-backup-and-restore-test).
 
 ## 15. Final checks
 
@@ -828,7 +864,7 @@ A restore test is not part of this procedure. If you add one, use a copy and doc
 4. Edge PAT entries show wired IT and Staff Wi-Fi.
 5. Eight phones register and calls connect between departments.
 6. Syslog server receives a new event.
-7. TFTP files, startup configs, and final .pkt are saved.
+7. TFTP files, startup configs, and final .pkt are saved; a sample running-config restore has been tested.
 8. Record the actual output using [the test page](validation.md).
 
 These are expected results for a new build. They do not turn uncollected results from the original lab into confirmed evidence.

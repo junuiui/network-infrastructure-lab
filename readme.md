@@ -58,15 +58,15 @@ Staff and guests use separate APs, SSIDs, and VLANs. Staff can reach internal se
 
 A 2811 router runs Call Manager Express. I set up eight extensions for two phones in each department.
 
-The collected output confirms one HR phone registered. Full registration and calls between departments were reported complete during the lab.
+I directly tested all eight phone registrations and calls between departments. One HR registration output is included in the record; the full eight-phone listing was not captured.
 
 **[CME, phone registration, and calls](docs/voip.md)**
 
 ## 06. Logs and backups
 
-The Syslog server received events from the core switch. I also saved the IT switch configuration and completed a manual TFTP backup.
+The Syslog server received events from the core switch. I completed the backup task and tested an IT switch restore from TFTP.
 
-The docs separate confirmed results from reported results. Individual Core, Edge, and Voice backup files still need a file-list check.
+The CLI record shows a 1,979-byte upload and download. The restore changed a test hostname back to IT-Switch, and management IP, ACL, and SSH checks passed within the recorded test scope. The restore merged settings into the running configuration; it was not a full device rebuild.
 
 **[Syslog and configuration backups](docs/monitoring-backup.md)**
 
@@ -86,9 +86,10 @@ The guide starts from a blank Packet Tracer file. It includes the device list, c
 
 ## Scope and evidence
 
-- **Output checked:** Client IP and Ping results, Guest ACL counters, SSH logins and counters, routing entries, one phone registration, Staff Wi-Fi Ping tests, PAT entries, and Syslog reception.
-- **Reported complete:** Some DNS/web tests, all eight phone registrations and calls, Staff Wi-Fi SSH blocking, and the IT switch TFTP backup.
-- **Still to check:** Some final settings, individual backup files, and a restore test. The final `.pkt` file is in this repository, but it was not rerun during the documentation update.
+- **Output checked:** Client IP/Ping tests, Guest ACL counters, SSH, routes, one phone registration, Staff Wi-Fi Ping, PAT, Syslog reception, and IT-Switch TFTP backup/restore with management checks.
+- **Directly tested by the lab owner:** All eight phone registrations and interdepartment calls, plus completion of the backup task. Full phone and non-IT-switch backup listings were not captured.
+- **Other reported results:** Some DNS/web tests and Staff Wi-Fi SSH blocking.
+- **Test limits:** The restore was a running-config merge, not an erased-device or reboot recovery test. Some final settings still have no separate capture. The final `.pkt` exists in the repository; it was not independently rerun during this documentation update.
 
 The external network is simulated. Server-PT is not Windows Server or Active Directory. Syslog collects events; this lab does not include a performance dashboard or automatic alerts. Python automation is outside the final scope.
 
