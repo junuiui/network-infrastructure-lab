@@ -1,113 +1,60 @@
-# Enterprise Network Infrastructure Lab
+# Company Network Infrastructure Lab
 
-**Cisco Packet Tracer | Network setup, testing, and troubleshooting**
+**Cisco Packet Tracer | Networking, troubleshooting, and recovery**
 
-I built a small company network with separate networks for HR, Engineering, Sales/Marketing, IT, servers, and guests. The lab covers IP addressing, DHCP, DNS, routing, access control, Wi-Fi, and IP phones.
+I built a simulated company network to practice the network tasks behind day-to-day IT support. The company plan has 70 employees across HR, Engineering, Sales/Marketing, and IT. I used a few devices in each department to test the setup.
 
-[**Start the rebuild guide**](docs/guide.md) · [**Open the final Packet Tracer file**](fake-company-final.pkt) · [**View test results**](docs/validation.md) · [**Read the troubleshooting log**](docs/troubleshooting.md)
+![Company network with department switches, servers, IP phones, and Staff and Guest Wi-Fi](resources/final.png)
 
-![Final lab layout with four departments, servers, an edge router, and two wireless networks](resources/final.png)
+*Final layout. The external server represents a network outside the company, not a live Internet connection.*
 
-*Final layout. The external server represents a network outside the company. It is not a live Internet connection.*
+## What I built
 
-## Project overview
+| Area | What I did | Why |
+| :--- | :--- | :--- |
+| Network separation | Created department Data and Voice VLANs, plus Server, Staff, and Guest networks | Keep different types of traffic separate |
+| IP addressing | Reworked the subnet plan, DHCP pools, and static addresses | Allow growth and avoid address conflicts |
+| Network services | Set up central DHCP, relay, DNS, and web services | Give clients the right settings and access by name |
+| External access | Added static routes and PAT on the edge router | Practice traffic flow to an external test network |
+| Access control | Blocked Guest access to internal networks and limited SSH to wired IT clients | Separate visitor traffic and protect device management |
+| Wireless and phones | Added Staff/Guest Wi-Fi and eight IP phones across four departments | Test common office connections |
+| Logs and recovery | Collected core Syslog events and tested a TFTP configuration restore | Practice checking events and recovering a saved setting |
 
-| Area | What I built |
-| :--- | :--- |
-| Network | Layer 3 core switch, department access switches, and an edge router |
-| Addressing | Separate Data and Voice VLANs, with room for growth |
-| Services | Central DHCP and relay, internal and external DNS, and web servers |
-| Security | Guest isolation and SSH access limited to the wired IT network |
-| Wireless | Separate Staff and Guest SSIDs and VLANs |
-| Phones | A separate 2811 router running CME for eight IP phones |
-| Operations | Central Syslog collection and manual TFTP backup practice |
+## Connecting users and services
 
-The company plan is based on 70 employees. I used a few devices in each department to test the design instead of adding every planned device.
+The core switch handles routing between VLANs and relays DHCP requests to one server. Staff use internal DNS to open the company test website. Guests use an external test DNS server and cannot reach internal servers.
 
-## 01. Architecture and IP addressing
+Staff and Guest Wi-Fi use separate APs, SSIDs, and VLANs. A Staff laptop and a wired IT PC were both shown sharing the edge router's external address through PAT.
 
-The core switch routes traffic between VLANs. The edge router handles traffic to the simulated external network. A separate voice router manages phone registration and extensions.
+## Managing switches and phones
 
-I reviewed the original address plan, added growth capacity, and separated DHCP ranges from static addresses. The old and new IP tables are both kept in the docs.
+I configured SSH on the Core, IT, and HR switches and tested allowed and blocked connections. The other access switches were left out of this repeated SSH setup.
 
-**[Network layout and port map](docs/architecture.md)** · **[Old and new IP plans](docs/addressing.md)**
+A separate 2811 router runs Call Manager Express for two phones in each department. I tested all eight registrations and calls between departments.
 
-## 02. Routing, DHCP, PAT, and DNS
+![HR PCs connected through two IP phones to the department switch](resources/1-HR-structure.png)
 
-A central server assigns IP addresses through DHCP relay. Staff use internal DNS. Guests use the external test DNS server.
+*PCs connect through the phones. Data and Voice traffic use separate VLANs.*
 
-The PAT output shows a wired IT PC and a Staff Wi-Fi laptop sharing the edge router's external address, `203.0.113.1`.
+## Troubleshooting and recovery
 
-**[Service setup and traffic flow](docs/network-services.md)**
+The main problems were overlapping subnets, DHCP and static-IP overlap risk, a wrong SSH permit network, DNS Service being Off, and a duplicate voice-router address. I checked the symptoms, narrowed down the cause, changed the settings, and tested again.
 
-## 03. Access control and SSH
+I also backed up the IT switch to TFTP, changed its hostname, and loaded the saved file into running-config. The upload and download both returned **1,979 bytes**. The hostname returned to IT-Switch, the management interface stayed up, and SSH login worked.
 
-The Guest ACL blocks access to private internal networks. SSH is set up on the core, IT, and HR switches. Only the wired IT subnet can connect.
+## Results and scope
 
-I left SSH off the other access switches because the setup would repeat the same steps.
+- Checked client addressing, routed connections, Guest blocking, and SSH access.
+- Confirmed PAT entries for wired and wireless clients.
+- Tested internal and external DNS/web access and calls between departments.
+- Confirmed core messages arrived at the Syslog server.
+- Checked a manual IT-Switch backup and running-config restore.
 
-**[Guest ACL and SSH setup](docs/security.md)**
+This is a Packet Tracer lab, not production experience. Syslog covers event collection, not a full monitoring dashboard. The restore test merged a saved configuration into a running switch; it was not an erased-device or reboot recovery test.
 
-## 04. Staff and Guest Wi-Fi
+**Lab files:** [Final network](fake-company-final.pkt) · [Restore test](fake-company-restore-test.pkt)
 
-Staff and guests use separate APs, SSIDs, and VLANs. Staff can reach internal services. Guests can reach the external test server but cannot reach internal servers. Both wireless networks are blocked from device management over SSH.
+## Detailed documentation
 
-**[Wireless setup and tests](docs/wireless.md)**
-
-## 05. IP phones
-
-A 2811 router runs Call Manager Express. I set up eight extensions for two phones in each department.
-
-I directly tested all eight phone registrations and calls between departments. One HR registration output is included in the record; the full eight-phone listing was not captured.
-
-**[CME, phone registration, and calls](docs/voip.md)**
-
-## 06. Logs and backups
-
-The Syslog server received events from the core switch. I completed the backup task and tested an IT switch restore from TFTP.
-
-The CLI record shows a 1,979-byte upload and download. The restore changed a test hostname back to IT-Switch, and management IP, ACL, and SSH checks passed within the recorded test scope. The restore merged settings into the running configuration; it was not a full device rebuild.
-
-**[Syslog and configuration backups](docs/monitoring-backup.md)**
-
-## 07. Troubleshooting and results
-
-The main issues included overlapping subnets, DHCP/static IP overlap, an incorrect SSH ACL, DNS being turned off, and a duplicate voice-router IP.
-
-Each record explains the problem, the checks, the fix, and the result.
-
-**[Troubleshooting log](docs/troubleshooting.md)** · **[Test results and remaining checks](docs/validation.md)**
-
-## Build it again
-
-The guide starts from a blank Packet Tracer file. It includes the device list, cables and ports, commands, GUI settings, and checks after each stage.
-
-**[Open guide.md](docs/guide.md)**
-
-## Scope and evidence
-
-- **Output checked:** Client IP/Ping tests, Guest ACL counters, SSH, routes, one phone registration, Staff Wi-Fi Ping, PAT, Syslog reception, and IT-Switch TFTP backup/restore with management checks.
-- **Directly tested by the lab owner:** All eight phone registrations and interdepartment calls, plus completion of the backup task. Full phone and non-IT-switch backup listings were not captured.
-- **Other reported results:** Some DNS/web tests and Staff Wi-Fi SSH blocking.
-- **Test limits:** The restore was a running-config merge, not an erased-device or reboot recovery test. Some final settings still have no separate capture. The final `.pkt` exists in the repository; it was not independently rerun during this documentation update.
-
-The external network is simulated. Server-PT is not Windows Server or Active Directory. Syslog collects events; this lab does not include a performance dashboard or automatic alerts. Python automation is outside the final scope.
-
-## Documentation
-
-| File | What it covers |
-| :--- | :--- |
-| [guide.md](docs/guide.md) | Rebuild the final design from the start |
-| [architecture.md](docs/architecture.md) | Devices, roles, cables, and ports |
-| [addressing.md](docs/addressing.md) | Old/new subnets, DHCP pools, and static IPs |
-| [network-services.md](docs/network-services.md) | Routing, DHCP, PAT, and DNS |
-| [security.md](docs/security.md) | Guest ACL and SSH |
-| [wireless.md](docs/wireless.md) | Staff and Guest Wi-Fi |
-| [voip.md](docs/voip.md) | CME, extensions, and phone tests |
-| [monitoring-backup.md](docs/monitoring-backup.md) | Syslog and manual backup |
-| [troubleshooting.md](docs/troubleshooting.md) | Problems, checks, fixes, and results |
-| [validation.md](docs/validation.md) | Evidence and remaining checks |
-| [Implementation history](docs/archive/implementation-log.md) | Earlier setup and changes |
-| [Screenshot index](resources/readme.md) | What each image shows and when it was taken |
-
-**Lab record date: October 27, 2026.** Each detailed page links back to this README.
+- **[HowTo.md](HowTo.md)** — Devices, port connections, settings, commands, and step-by-step checks.
+- **[ProblemSolving.md](ProblemSolving.md)** — Problems, investigation steps, fixes, and actual test results.
