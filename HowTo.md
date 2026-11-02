@@ -2,7 +2,21 @@
 
 [Back to README](readme.md) · [Problems and fixes](ProblemSolving.md)
 
-Use a blank Packet Tracer file. Follow the sections in order. Replace `<LAB_PASSWORD>` with your own lab-only password. Do not paste the angle brackets into the command.
+This guide describes the intended final setup in the existing lab documentation. It has not been independently rebuilt or compared with the latest `.pkt` during this revision. Treat the checks below as steps to run, not as new test results. See [recorded results and evidence limits](ProblemSolving.md#recorded-test-results).
+
+Use a blank Packet Tracer file and follow the sections in order. Use the device models listed below. The existing documents do not record the Packet Tracer version used, so exact version compatibility remains unverified.
+
+Replace `<LAB_PASSWORD>` with your own lab-only password. Do not paste the angle brackets into the command. Choose separate lab-only Staff and Guest Wi-Fi keys and enter the matching key on each laptop.
+
+### Before entering CLI commands
+
+Open the named device and select **CLI**. Enter `enable` to reach the privileged prompt (`#`). Run `show`, `ping`, and `copy` commands from that prompt. Configuration blocks start with `configure terminal` and end with `end`. Replace device names only where the guide tells you to; Core, IT, HR, S/M, Server, and Guest refer to the named switches in the tables.
+
+### Build order and traffic path
+
+Department PCs connect through IP phones to their access switches. Department, Server, and Guest switches connect to the Core. The Core routes between VLANs and relays DHCP to `192.168.1.2`. Its routed uplink leads to Edge, which connects directly to External-Web. Staff Wi-Fi connects through IT-Switch; Guest Wi-Fi connects through Guest-Switch. Voice-Router connects to Server-Switch.
+
+Complete switching and addressing first (sections 1–6), then Guest policy and external access (7–10), management and wireless (11–12), and voice, logs, backup, and recovery (13–17). Keep the IP/VLAN and port tables below beside you during the build.
 
 ## 1. Add the devices
 
@@ -18,6 +32,8 @@ Use a blank Packet Tracer file. Follow the sections in order. Replace `<LAB_PASS
 | Printers | One sample printer per department |
 | Guest-AP, Staff-AP | Two AccessPoint-PT devices |
 | Guest-Laptop-1, Staff-Laptop-1 | Two Laptop-PT devices with WPC300N |
+
+The company plan covers 70 employees, but this build uses sample clients. Connect the department PCs through the two phones in each department. The original guide does not give an exact count for wired Guest clients; the port table reserves Guest Fa0/1–2 for them.
 
 ## 2. Connect the devices
 
@@ -41,7 +57,7 @@ Use a blank Packet Tracer file. Follow the sections in order. Replace `<LAB_PASS
 | Guest Fa0/3 | Guest-AP Port 0 |
 | IT Fa0/4 | Staff-AP Port 0 |
 
-Use automatic cable selection. Supply phone power through a supported PoE port or a Physical-tab power adapter.
+Use automatic cable selection. Supply phone power through a supported PoE port or a Physical-tab power adapter. Keep the phone's **Switch** port facing the department switch and its **PC** port facing the PC. Use the same department port pattern on HR, ENG, S/M, and IT.
 
 ![Department phone and PC connections](resources/1-HR-structure.png)
 
@@ -413,7 +429,7 @@ On Server-PT, open **Desktop → IP Configuration → Static**. On a printer, us
 | S/M printer | 192.168.1.126 | 255.255.255.192 | 192.168.1.65 |
 | IT printer | 192.168.1.30 | 255.255.255.240 | 192.168.1.17 |
 
-Leave 192.168.1.6 for serverPool. Do not assign 192.168.1.28 or 192.168.0.220 to clients.
+Leave 192.168.1.6 for serverPool. Reserve 192.168.1.28 for IT-Switch management and 192.168.0.220 for HR-Switch management (section 11). Reserve 192.168.1.4 for Voice-Router (section 13). Do not assign these addresses to other clients. The pool limits in section 6 keep them outside dynamic allocation.
 
 On Web-Server, turn **Services → HTTP → On**.
 
@@ -484,7 +500,7 @@ ping 192.168.1.2
 ping 192.168.1.3
 ```
 
-Expect the gateway to reply and both internal targets to be blocked. Run `show access-lists` on Core and check the matching counters.
+Expect the gateway to reply and both internal targets to be blocked. Run `show access-lists` on Core and check the matching counters. This ACL controls routed traffic entering the Guest SVI; the listed tests check Guest-to-internal access, not isolation between clients in the same Guest VLAN.
 
 ## 8. Configure the edge link and routes
 
@@ -790,6 +806,8 @@ show ephone
 
 Check eight REGISTERED entries and the correct Voice addresses. Read the extension on each phone. From HR, dial ENG and pick up on ENG. Confirm connection and hang up. Repeat between S/M and IT.
 
+The configuration uses automatic extension assignment. The existing record confirms one HR phone at extension 1001, but does not provide a fixed extension-to-phone map for all eight phones. Read the assigned numbers after registration before making the test calls.
+
 ## 14. Configure Syslog
 
 On **DHCP-Server → Services → SYSLOG**, turn the service **On**.
@@ -889,6 +907,10 @@ Check replies and an SSH login to **IT-Switch#**. Keep the transfer output and t
 
 ## 17. Final checks
 
+Run these checks on the completed build and record the source device, target, actual output, and pass/fail result. Use section 3 for gateway addresses, section 5 for printers and servers, section 10 for DNS names, and section 11 for SSH targets. Use the full IP address in commands; shortened addresses in the historical results are only notation.
+
+For each department PC, run `ipconfig /all`, Ping its gateway, then Ping `192.168.1.2`, `192.168.1.3`, and its department printer. An assigned DHCP address can vary within its pool. A first timeout followed by replies should be recorded with the actual counts; repeat the test before calling it a clean pass.
+
 | Area | Check |
 | :--- | :--- |
 | Client addressing | Check IP, mask, gateway, and DNS |
@@ -902,5 +924,9 @@ Check replies and an SSH login to **IT-Switch#**. Keep the transfer output and t
 | Backup | Check transfer success and saved files |
 | Restore | Check hostname, management SVI, ACL, and SSH |
 | Save | Save changed startup configs and the .pkt |
+
+The existing records leave these checks pending or unverified: a captured final ENG DHCP pool-limit field, full Staff Wireless0 mask/gateway/DNS output, and clean repeat Pings for S/M-to-Web and the IT restore check. Check them on your build and keep the output. Do not infer a saved DHCP field from a successful Ping.
+
+Use **File → Save As** to keep the final network and restore-test copy separate. The documented restore is a merge into running-config; it does not test an erased switch or reboot recovery.
 
 [Back to README](readme.md) · [Problems and fixes](ProblemSolving.md)

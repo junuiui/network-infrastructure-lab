@@ -2,59 +2,44 @@
 
 **Cisco Packet Tracer | Networking, troubleshooting, and recovery**
 
-I built a simulated company network to practice the network tasks behind day-to-day IT support. The company plan has 70 employees across HR, Engineering, Sales/Marketing, and IT. I used a few devices in each department to test the setup.
+## Summary
+
+I built a simulated company network for a 70-employee plan across HR, Engineering, Sales/Marketing, and IT. I used sample devices to test department networks, shared services, access control, and recovery.
 
 ![Company network with department switches, servers, IP phones, and Staff and Guest Wi-Fi](resources/final.png)
 
-*Final layout. The external server represents a network outside the company, not a live Internet connection.*
+## Motivation
 
-## What I built
+I wanted to practice building network infrastructure and troubleshooting common office connectivity problems. This lab helped me follow traffic from a client through VLANs, routing, and network services, then check whether the setup worked as intended.
 
-| Area | What I did | Why |
-| :--- | :--- | :--- |
-| Network separation | Created department Data and Voice VLANs, plus Server, Staff, and Guest networks | Keep different types of traffic separate |
-| IP addressing | Reworked the subnet plan, DHCP pools, and static addresses | Allow growth and avoid address conflicts |
-| Network services | Set up central DHCP, relay, DNS, and web services | Give clients the right settings and access by name |
-| External access | Added static routes and PAT on the edge router | Practice traffic flow to an external test network |
-| Access control | Blocked Guest access to internal networks and limited SSH to wired IT clients | Separate visitor traffic and protect device management |
-| Wireless and phones | Added Staff/Guest Wi-Fi and eight IP phones across four departments | Test common office connections |
-| Logs and recovery | Collected core Syslog events and tested a TFTP configuration restore | Practice checking events and recovering a saved setting |
+## Implementation
 
-## Connecting users and services
+| Area | What I built |
+| :--- | :--- |
+| Switching and routing | Department Data and Voice VLANs, Server and wireless VLANs, inter-VLAN routing on a 3560 core, and static routes |
+| Addressing and services | Revised subnets, central DHCP with relay, static printer addresses, DNS, and HTTP |
+| External access | Edge-router PAT, with wired IT and Staff Wi-Fi clients sharing one external address |
+| Access control | Guest ACLs blocking internal networks; SSH restricted to wired IT clients on Core, IT, and HR switches |
+| Wireless and voice | Separate Staff and Guest APs; eight IP phones using Call Manager Express on a 2811 router |
+| Logs and recovery | Core Syslog collection and a manual IT-Switch TFTP backup and running-config restore |
 
-The core switch handles routing between VLANs and relays DHCP requests to one server. Staff use internal DNS to open the company test website. Guests use an external test DNS server and cannot reach internal servers.
+The existing lab records include client connectivity checks, Guest blocking, SSH access tests, PAT entries, DNS/web access, phone calls, and Syslog events. The restore returned the IT switch hostname and allowed SSH login.
 
-Staff and Guest Wi-Fi use separate APs, SSIDs, and VLANs. A Staff laptop and a wired IT PC were both shown sharing the edge router's external address through PAT.
-
-## Managing switches and phones
-
-I configured SSH on the Core, IT, and HR switches and tested allowed and blocked connections. The other access switches were left out of this repeated SSH setup.
-
-A separate 2811 router runs Call Manager Express for two phones in each department. I tested all eight registrations and calls between departments.
-
-![HR PCs connected through two IP phones to the department switch](resources/1-HR-structure.png)
-
-*PCs connect through the phones. Data and Voice traffic use separate VLANs.*
-
-## Troubleshooting and recovery
-
-The main problems were overlapping subnets, DHCP and static-IP overlap risk, a wrong SSH permit network, DNS Service being Off, and a duplicate voice-router address. I checked the symptoms, narrowed down the cause, changed the settings, and tested again.
-
-I also backed up the IT switch to TFTP, changed its hostname, and loaded the saved file into running-config. The upload and download both returned **1,979 bytes**. The hostname returned to IT-Switch, the management interface stayed up, and SSH login worked.
-
-## Results and scope
-
-- Checked client addressing, routed connections, Guest blocking, and SSH access.
-- Confirmed PAT entries for wired and wireless clients.
-- Tested internal and external DNS/web access and calls between departments.
-- Confirmed core messages arrived at the Syslog server.
-- Checked a manual IT-Switch backup and running-config restore.
-
-This is a Packet Tracer lab, not production experience. Syslog covers event collection, not a full monitoring dashboard. The restore test merged a saved configuration into a running switch; it was not an erased-device or reboot recovery test.
+**Build guide:** [HowTo.md](HowTo.md)
 
 **Lab files:** [Final network](fake-company-final.pkt) · [Restore test](fake-company-restore-test.pkt)
 
-## Detailed documentation
+## Problems and Solutions
 
-- **[HowTo.md](HowTo.md)** — Devices, port connections, settings, commands, and step-by-step checks.
-- **[ProblemSolving.md](ProblemSolving.md)** — Problems, investigation steps, fixes, and actual test results.
+1. **Overlapping subnets:** The core rejected a proposed S/M address because it overlapped with ENG Voice. I compared full subnet ranges and moved S/M Data and Voice to separate /26 networks. The S/M client then received the new settings and reached its gateway and servers.
+2. **SSH blocked for IT:** The Core SSH ACL permitted the Server subnet instead of IT Data. I checked SSH settings and ACL counters, then corrected the permit to `192.168.1.16/28`. IT login worked and non-IT access was blocked.
+3. **HTTP worked by IP but failed by name:** I checked the client DNS setting, service state, and A record. DNS Service was Off. After enabling it, name-based access passed in the owner's lab tests.
+
+See [ProblemSolving.md](ProblemSolving.md) for the investigation steps, reasons, fixes, and recorded results for all cases.
+
+## Limitations
+
+- This is a Packet Tracer simulation with sample clients. The 70-employee plan was not a full-device or load test. The external server simulates an outside network; it is not a live Internet connection.
+- SSH was configured on Core, IT, and HR only. Syslog covers core event collection, without a full monitoring dashboard or synchronized device clocks.
+- The restore merged a backup into running-config. An erased-device rebuild and reboot recovery were not tested.
+- This documentation uses existing lab records; the latest `.pkt` files were not independently rerun during this revision. Some results rely on owner confirmation, and some captures remain missing. [Evidence limits](ProblemSolving.md#evidence-limits) lists the details.

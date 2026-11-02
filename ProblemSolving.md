@@ -2,13 +2,21 @@
 
 [Back to README](readme.md) · [Build steps](HowTo.md)
 
-These are the problems and checks from the Packet Tracer lab. Each record separates what was observed from what was only possible. The old addresses below are part of the history; use [HowTo.md](HowTo.md) for the final setup.
+These records come from the existing lab documentation. They have not been independently rerun during this revision. Each case separates the symptom, cause or finding, investigation approach and reason, fix, and recorded verification. Cases 6 and 13 are diagnostic observations; case 14 is a planned recovery test. They are not all faults.
+
+The old addresses below are part of the history; use [HowTo.md](HowTo.md) for the intended final setup.
+
+**Evidence status:** “Recorded verification” describes results preserved in the existing document, not a new test. Owner-confirmed tests are identified separately. Missing captures and unconfirmed causes remain unverified; pending checks are not treated as passes.
 
 ## 1. Clients could not get DHCP addresses
 
-**Problem:** Clients showed APIPA addresses, 169.254.x.x, or kept waiting for DHCP.
+**Symptom:** Clients showed APIPA addresses, 169.254.x.x, or kept waiting for DHCP.
 
-**Approach:** Check the device being configured, access VLANs, server connection, core SVI addresses, and relay path.
+**Investigation approach:** Check the device being configured, access VLANs, server connection, core SVI addresses, and relay path.
+
+**Why:** DHCP crosses several devices. Checking the local VLAN and server path first helps separate a connection problem from a missing gateway or relay setting.
+
+**Cause:** The record lists several configuration errors below. It does not isolate one error as the only cause of every failed lease.
 
 | Finding | Action |
 | :--- | :--- |
@@ -17,7 +25,7 @@ These are the problems and checks from the Packet Tracer lab. Each record separa
 | The old direct DHCP-server port was in VLAN 10 | Change it to Server VLAN 50 |
 | Server/IT SVIs were unassigned | Add the gateway addresses and enable the interfaces |
 
-**Result:** The early lab record reported successful DHCP relay and client leases. The server later moved from Core Gi0/2 to Server-Switch Fa0/1. The addresses were revised in the next stage.
+**Recorded verification:** The early lab record reported successful DHCP relay and client leases. The server later moved from Core Gi0/2 to Server-Switch Fa0/1. The addresses were revised in the next stage.
 
 ### Early build references
 
@@ -31,13 +39,19 @@ These are the problems and checks from the Packet Tracer lab. Each record separa
 
 ## 2. The original subnets had too little room
 
-**Problem:** Server Farm and IT Data had /29 networks. After the gateway, only five device addresses remained, below their six-device targets. Other subnets needed more room for the new growth target.
+**Symptom:** Server Farm and IT Data had /29 networks. After the gateway, only five device addresses remained, below their six-device targets. Other subnets needed more room for the new growth target.
 
-**First approach:** Expand DHCP masks and pool sizes, then update core SVIs.
+**Investigation approach:** Start by reviewing DHCP masks, pool sizes, and core SVIs.
 
-**Further checks:** Compare the full subnet ranges before applying changes. Review static IPs, server masks, Guest ACL addresses, and client leases.
+The initial attempt expanded DHCP masks and pool sizes, then updated core SVIs. The overlap checks below showed why a full address-plan change was needed.
 
-**Action:** Plan for 50% more devices plus the gateway. Move the overlapping networks instead of only changing masks.
+Compare the full subnet ranges before applying changes. Review static IPs, server masks, Guest ACL addresses, and client leases.
+
+**Why:** A larger DHCP pool cannot add usable addresses to a small subnet. Changing a mask can also create overlap with a neighboring network.
+
+**Cause:** The /29 capacity did not meet the stated device target. Expanding networks in place would conflict with existing allocations.
+
+**Fix:** Plan for 50% more devices plus the gateway. Move the overlapping networks instead of only changing masks.
 
 | Step | Change |
 | :--- | :--- |
@@ -48,7 +62,7 @@ These are the problems and checks from the Packet Tracer lab. Each record separa
 | 5 | Move HR Data into the old Guest area |
 | 6 | Expand HR Voice after the old HR Data range is free |
 
-**Result:** Sample clients received the new settings and reached their expected targets. This was a capacity calculation and sample-device test, not a full-pool exhaustion test.
+**Recorded verification:** Sample clients received the new settings and reached their expected targets. This was a capacity calculation and sample-device test, not a full-pool exhaustion test.
 
 HR Voice already had enough room for eight phones plus 50% growth under /28. Its /27 expansion was an extra choice, not a proven shortage.
 
@@ -84,7 +98,7 @@ HR Voice already had enough room for eight phones plus 50% growth under /28. Its
 
 ## 3. The core rejected a new S/M address
 
-**Problem:** The switch rejected 192.168.0.65/26.
+**Symptom:** The switch rejected 192.168.0.65/26.
 
 ```text
 Switch(config-if)#no ip address
@@ -92,35 +106,45 @@ Switch(config-if)#ip address 192.168.0.65 255.255.255.192
 % 192.168.0.64 overlaps with Vlan120
 ```
 
-**Approach:** Compare network-to-broadcast ranges, not just gateway or DHCP start addresses.
+**Investigation approach:** Compare network-to-broadcast ranges, not just gateway or DHCP start addresses.
 
-**Finding:** ENG Voice already used 192.168.0.64/26. Another proposed pair, .0.129 and .0.162, would also overlap under /26. Both belong to .0.128–191. The following /26 was occupied by Guest and HR at the time.
+**Why:** Different host addresses can still belong to the same subnet. The overlap message identifies an address-plan conflict, so checking complete ranges is the next step.
 
-**Action:** Use S/M Data 192.168.1.64/26 and Voice 192.168.1.128/26. Explicitly set both SVI addresses.
+**Cause / finding:** ENG Voice already used 192.168.0.64/26. Another proposed pair, .0.129 and .0.162, would also overlap under /26. Both belong to .0.128–191. The following /26 was occupied by Guest and HR at the time.
 
-**Result:** S/M PC received 192.168.1.67/26, gateway 192.168.1.65, and reached the gateway and servers.
+**Fix:** Use S/M Data 192.168.1.64/26 and Voice 192.168.1.128/26. Explicitly set both SVI addresses.
+
+**Recorded verification:** S/M PC received 192.168.1.67/26, gateway 192.168.1.65, and reached the gateway and servers.
 
 **Important detail:** Removing the old address succeeded even when the next address command failed. The correct SVI address had to be restored.
 
 ## 4. A Guest client still showed the old address
 
-**Problem:** Guest first showed 192.168.0.195/27 with gateway .0.193 after the migration steps.
+**Symptom:** Guest first showed 192.168.0.195/27 with gateway .0.193 after the migration steps.
 
-**Approach:** Confirm the saved DHCP pool and SVI, then renew the client rather than assuming the new pool failed.
+**Investigation approach:** Confirm the saved DHCP pool and SVI, then renew the client.
 
-**Action:** Select Static, then DHCP in the client IP Configuration.
+**Why:** The client may still hold a lease from before the migration. Renewal checks whether the updated pool supplies the intended settings.
 
-**Result:** The client showed 192.168.1.195/26 with gateway .1.193. The wireless Guest later received .1.196.
+**Cause:** The client retained the old lease settings; renewal produced the new address. A new pool failure was not established.
+
+**Fix:** Select Static, then DHCP in the client IP Configuration.
+
+**Recorded verification:** The client showed 192.168.1.195/26 with gateway .1.193. The wireless Guest later received .1.196.
 
 ## 5. The ENG printer was inside the DHCP range
 
-**Problem:** The original printer address .0.4 was inside the DHCP range .0.2–61. A duplicate allocation was possible; an actual duplicate lease was not captured.
+**Symptom:** The original printer address .0.4 was inside the DHCP range .0.2–61. A duplicate allocation was possible; an actual duplicate lease was not captured.
 
-**Approach:** Compare static addresses against pool start and maximum users.
+**Investigation approach:** Compare static addresses against pool start and maximum users.
 
-**Action:** Set ENG-Data to 58 users, giving .2–59, and move the printer to 192.168.0.62/26 with gateway .0.1.
+**Why:** A successful Ping does not prove an address is outside DHCP. Calculating the lease range exposes a duplicate-allocation risk before another client receives the same address.
 
-**Result:** Printer Ping passed 3/3 and DHCP-server Ping passed 2/2. The final saved pool-limit screen was not captured, so successful Ping is not used to prove that field.
+**Cause:** The static printer address was not separated from the DHCP allocation range. An actual duplicate lease was not confirmed.
+
+**Fix:** Set ENG-Data to 58 users, giving .2–59, and move the printer to 192.168.0.62/26 with gateway .0.1.
+
+**Recorded verification:** Printer Ping passed 3/3 and DHCP-server Ping passed 2/2. The final saved pool-limit screen was not captured, so successful Ping is not used to prove that field.
 
 The default serverPool was also kept at a single lease, 192.168.1.6. That address was excluded from static server assignments.
 
@@ -128,33 +152,43 @@ The default serverPool was also kept at a single lease, 192.168.1.6. That addres
 
 **Observed behavior:** Guest reached its gateway but received Destination host unreachable for 192.168.1.2 and .3.
 
-**Approach:** Check the policy and ACL counters instead of treating every failed Ping as an outage.
+**Investigation approach:** Check the intended Guest policy and ACL counters.
 
-**Finding:** The seven wired test requests matched seven hits on the internal-network deny rule. DHCP had a separate permit.
+**Why:** A failed Ping is expected when the ACL blocks that destination. A matching deny counter connects the observed failure to the configured policy.
 
-**Result:** This was expected Guest isolation. Wireless Guest checks later showed the same gateway-success/server-block behavior.
+**Cause / finding:** The seven wired test requests matched seven hits on the internal-network deny rule. DHCP had a separate permit.
+
+**Fix:** No policy change was needed for this result. Internal access was intended to be blocked.
+
+**Recorded verification:** This was expected Guest isolation. Wireless Guest checks later showed the same gateway-success/server-block behavior.
 
 A hit on the final Guest permit rule did not prove PAT or external service access; those were tested separately.
 
 ## 7. SSH reached Password prompts, then closed
 
-**Problem:** Core and IT switch connections reached authentication but did not accept the login.
+**Symptom:** Core and IT switch connections reached authentication but did not accept the login.
 
-**Approach:** Keep this separate from a connection blocked before authentication. Check the local account on the target device and its VTY login setting.
+**Investigation approach:** Check the local account on the target device and its VTY login setting. Keep this separate from a connection blocked before authentication.
 
-**Action:** Reset the netadmin secret on the target device and apply login local to its VTY lines.
+**Why:** Reaching a Password prompt shows the connection progressed to authentication. This makes the target's account and login method more useful checks than changing routing.
 
-**Result:** IT-Switch later accepted the login. Core login also passed after its separate ACL problem was corrected. The exact original password/input error was not confirmed.
+**Cause:** Unconfirmed. The exact original password/input error was not established.
+
+**Fix:** Reset the netadmin secret on the target device and apply login local to its VTY lines.
+
+**Recorded verification:** IT-Switch later accepted the login. Core login also passed after its separate ACL problem was corrected. The exact original password/input error was not confirmed.
 
 Each switch had its own local account; the core account did not automatically exist on the access switch.
 
 ## 8. Core SSH was refused because of the ACL
 
-**Problem:** Later Core connection attempts returned Connection refused before a Password prompt.
+**Symptom:** Later Core connection attempts returned Connection refused before a Password prompt.
 
-**Approach:** Check show ip ssh, VTY settings, show users, and ACL counters.
+**Investigation approach:** Check `show ip ssh`, VTY settings, `show users`, and ACL counters.
 
-**Finding:** SSH v2 was enabled, but the ACL allowed the wrong subnet:
+**Why:** These checks distinguish an inactive SSH service or session issue from a source-address restriction. The deny counter helps explain refusal before authentication.
+
+**Cause / finding:** SSH v2 was enabled, but the ACL allowed the wrong subnet:
 
 ```text
 Standard IP access list SSH-IT-ONLY
@@ -162,7 +196,7 @@ Standard IP access list SSH-IT-ONLY
  20 deny any (10 match(es))
 ```
 
-**Action:**
+**Fix:**
 
 ```text
 configure terminal
@@ -175,56 +209,68 @@ exit
 end
 ```
 
-**Result:** IT login reached Core-Switch#. Non-IT access was blocked. The collected counters were permit 2/deny 5 on Core, 16/16 on IT, and 2/15 on HR.
+**Recorded verification:** IT login reached Core-Switch#. Non-IT access was blocked. The collected counters were permit 2/deny 5 on Core, 16/16 on IT, and 2/15 on HR.
 
 A separate activation message mentioned SSH 1.99. The follow-up show ip ssh output confirmed version 2.0; the log text alone was not used as the version check.
 
 ## 9. IP-based HTTP worked, but the hostname failed
 
-**Problem:** Ping to the DNS server and HTTP by IP worked, but the name returned Hostname unresolved.
+**Symptom:** Ping to the DNS server and HTTP by IP worked, but the name returned Hostname unresolved.
 
-**Approach:** Check the client DNS address, DNS service state, and the actual A record.
+**Investigation approach:** Check the client DNS address, DNS service state, and the actual A record.
 
-**Finding:** The DNS address was correct, but DNS Service was Off.
+**Why:** Working HTTP by IP confirms the web service is reachable. The failed hostname points to name resolution, so the next checks focus on DNS.
 
-**Action:** Turn DNS On and retest the name. Apply the internal DNS address to all staff Data pools and external DNS to Guest.
+**Cause / finding:** The DNS address was correct, but DNS Service was Off.
 
-**Result:** Internal-name access across departments and Guest external-name access were tested successfully by the lab owner. Individual nslookup outputs were not all saved.
+**Fix:** Turn DNS On and retest the name. Apply the internal DNS address to all staff Data pools and external DNS to Guest.
+
+**Recorded verification:** Internal-name access across departments and Guest external-name access were tested successfully by the lab owner. Individual nslookup outputs were not all saved.
 
 ## 10. The edge router did not accept telephony-service
 
-**Problem:** The current 2911 simulation returned Unrecognized command.
+**Symptom:** The current 2911 simulation returned Unrecognized command.
 
-**Approach:** Check command support before changing the working edge network.
+**Investigation approach:** Check command support before changing the working edge network.
 
-**Action:** Add a separate 2811 and run telephony-service ?. It returned <cr>. Keep routing/PAT on the edge and configure CME on the 2811.
+**Why:** An unrecognized configuration command can reflect simulator/model support. Checking the command parser avoids changing routing to solve a feature-support problem.
 
-**Result:** The voice feature became available. This was a model/IOS finding in Packet Tracer, not a claim that all real 2911 routers lack voice support.
+**Cause / finding:** The command was unavailable on the 2911 used in this simulation and available on the added 2811. The record does not establish a broader hardware or IOS limitation.
+
+**Fix:** Add a separate 2811 and run telephony-service ?. It returned <cr>. Keep routing/PAT on the edge and configure CME on the 2811.
+
+**Recorded verification:** The voice feature became available. This was a model/IOS finding in Packet Tracer, not a claim that all real 2911 routers lack voice support.
 
 ## 11. Phones stayed at Configuring CM List
 
-**Problem:** The phone did not register, and show ephone was empty.
+**Symptom:** The phone did not register, and show ephone was empty.
 
-**Approach:** Check the Voice DHCP TFTP field, the voice-router interface address, and CME registration settings.
+**Investigation approach:** Check the Voice DHCP TFTP field, the voice-router interface address, and CME registration settings.
 
-**Findings:**
+**Why:** A phone needs the configuration-server address and a reachable CME service. These checks follow that path and expose both address conflicts and missing CME settings.
+
+**Causes / findings:**
 
 - Voice-Router used 192.168.1.3, already assigned to Web-Server.
 - CME had no ip source-address.
 
-**Action:** Change the router to 192.168.1.4/28, set ip source-address 192.168.1.4 port 2000, run create cnf-files, confirm Voice-pool TFTP .4, and restart a phone.
+**Fix:** Change the router to 192.168.1.4/28, set ip source-address 192.168.1.4 port 2000, run create cnf-files, confirm Voice-pool TFTP .4, and restart a phone.
 
-**Result:** The supplied output confirmed HR phone .0.226, MAC 0060.3E43.7B36, registered with extension 1001. The lab owner directly tested all eight registrations and calls between HR/ENG and S/M/IT.
+**Recorded verification:** The supplied output confirmed HR phone .0.226, MAC 0060.3E43.7B36, registered with extension 1001. The lab owner directly tested all eight registrations and calls between HR/ENG and S/M/IT.
 
 ## 12. Syslog severity commands failed
 
-**Problem:** logging trap informational and logging trap 6 were rejected.
+**Symptom:** logging trap informational and logging trap 6 were rejected.
 
-**Approach:** Use logging ? to check the supported command options. Do not assume the entire trap function is missing.
+**Investigation approach:** Use `logging ?` to check the supported command options.
 
-**Action:** Apply logging trap debugging and inspect show logging.
+**Why:** A rejected severity keyword does not show that all remote logging is unsupported. The parser lists the options available in this simulation.
 
-**Result:** Core showed logging enabled to 192.168.1.2 on UDP 514 at debugging level. The server received two CONFIG_I events and one LOGGINGHOST_STARTSTOP from 192.168.1.1.
+**Cause / finding:** The tested severity forms were rejected in this simulation. The underlying reason was not confirmed; the accepted form below was checked through `show logging` and server events.
+
+**Fix:** Apply logging trap debugging and inspect show logging.
+
+**Recorded verification:** Core showed logging enabled to 192.168.1.2 on UDP 514 at debugging level. The server received two CONFIG_I events and one LOGGINGHOST_STARTSTOP from 192.168.1.1.
 
 The server screenshot was supplied during the lab but is not currently a file in resources. Device timestamps were not synchronized with the real date.
 
@@ -232,9 +278,15 @@ The server screenshot was supplied during the lab but is not currently a file in
 
 **Observation:** S/M→Web and the later restore check each showed an initial timeout followed by replies.
 
-**Approach:** Record the actual counts. Initial ARP was possible, but not confirmed as the cause.
+**Investigation approach:** Record the actual counts and check whether the target is a valid host address.
 
-**Result:** S/M→Web returned 2/3 and the restore check returned 2/3. No clean four-reply repeat was supplied.
+**Why:** Later replies show some connectivity, but they do not explain the first timeout or prove a clean repeat. A network address is also not a valid endpoint test.
+
+**Cause:** The initial timeout cause is unconfirmed. Initial ARP was possible. The separate Guest test used a network address as its target.
+
+**Fix:** Use the configured host or gateway address for endpoint tests. No confirmed fix for the initial timeout is recorded.
+
+**Recorded verification:** S/M→Web returned 2/3 and the restore check returned 2/3. No clean four-reply repeat was supplied.
 
 Guest also pinged 192.168.1.192, the /26 network address. A reply from .193 was not evidence of an endpoint at .192. Typing errors such as ing and show running config were corrected separately.
 
@@ -242,7 +294,13 @@ Guest also pinged 192.168.1.192, the /26 network address. A reply from .193 was 
 
 **Test:** Deliberately change the IT switch hostname and load its saved file from TFTP.
 
-**Approach:** Save a backup first. Apply one visible temporary change. Restore into running-config, then check the hostname, management SVI, ACL, and access.
+**Investigation approach:** Save a backup first. Apply one visible temporary change. Restore into running-config, then check the hostname, management SVI, ACL, and access.
+
+**Why:** A successful upload alone does not show that a backup can apply a saved setting. Changing the hostname provides a visible value to check after the download.
+
+**Cause / scope:** This was a planned recovery test, not an accidental outage. The deliberate hostname change was the setting restored.
+
+**Fix tested:** Load `IT-Switch-final.cfg` from TFTP into running-config.
 
 ### Recorded restore result
 
